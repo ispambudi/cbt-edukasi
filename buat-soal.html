@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buat Soal - Sistem Ujian</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding-bottom: 2rem;
+        }
+
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn-back {
+            color: white;
+            text-decoration: none;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        .btn-back:hover { opacity: 0.8; }
+
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .form-group { margin-bottom: 1.25rem; }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        input[type="text"], select, textarea, input[type="file"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            background-color: #fff;
+        }
+
+        /* Gaya untuk kotak target ujian yang terkunci */
+        input:disabled {
+            background-color: #f3f4f6;
+            color: var(--text-muted);
+            cursor: not-allowed;
+            font-weight: 600;
+        }
+
+        input[type="file"] {
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+
+        input[type="file"]::file-selector-button {
+            background-color: #e5e7eb;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            margin-right: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: 500;
+        }
+
+        input[type="file"]::file-selector-button:hover { background-color: #d1d5db; }
+        input[type="text"]:focus, select:focus, textarea:focus, input[type="file"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .options-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            margin-top: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary:hover { background-color: var(--primary-hover); }
+
+        .help-text {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        @media (max-width: 600px) {
+            .options-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-nav">
+            <a href="dashboard-guru.html" class="btn-back">← Kembali</a>
+            <h1>Tambah Soal Baru</h1>
+        </div>
+        <div class="user-profile">Guru</div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <form id="formSoal">
+                
+                <div class="form-group">
+                    <label>Menambahkan Soal Untuk:</label>
+                    <input type="text" id="namaTargetUjian" value="Memuat data ujian..." disabled>
+                    <input type="hidden" id="idTargetUjian" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="teksSoal">Pertanyaan</label>
+                    <textarea id="teksSoal" placeholder="Ketikkan pertanyaan di sini..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="gambarSoal">Upload Gambar Pendukung (Opsional)</label>
+                    <input type="file" id="gambarSoal" accept="image/png, image/jpeg, image/jpg">
+                    <span class="help-text">Format yang didukung: JPG, JPEG, PNG. Kosongkan jika soal tidak menggunakan gambar.</span>
+                </div>
+
+                <div class="options-grid">
+                    <div class="form-group">
+                        <label for="opsiA">Pilihan A</label>
+                        <input type="text" id="opsiA" placeholder="Teks jawaban A" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="opsiB">Pilihan B</label>
+                        <input type="text" id="opsiB" placeholder="Teks jawaban B" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="opsiC">Pilihan C</label>
+                        <input type="text" id="opsiC" placeholder="Teks jawaban C" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="opsiD">Pilihan D</label>
+                        <input type="text" id="opsiD" placeholder="Teks jawaban D" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="kunciJawaban">Kunci Jawaban Benar</label>
+                    <select id="kunciJawaban" required>
+                        <option value="">-- Tentukan Kunci Jawaban --</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-primary">Simpan Soal</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        // 1. Inisialisasi Supabase 
+        const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- BAGIAN BARU: Menangkap ID Ujian dari URL ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const ujianIdDariUrl = urlParams.get('ujian_id');
+
+        if (!ujianIdDariUrl) {
+            // Jika tidak ada ID di URL (misal bapak langsung buka file buat-soal.html tanpa lewat dashboard)
+            alert("Harap pilih ujian dari Dashboard terlebih dahulu!");
+            window.location.href = 'dashboard-guru.html';
+        } else {
+            // Simpan ID ke kotak tersembunyi
+            document.getElementById('idTargetUjian').value = ujianIdDariUrl;
+
+            // Memanggil database untuk mengambil nama ujian agar tampil di layar
+            async function ambilNamaUjian() {
+                const { data, error } = await supabaseClient
+                    .from('ujian')
+                    .select('nama_ujian')
+                    .eq('id', ujianIdDariUrl)
+                    .single(); // Ambil satu baris saja
+
+                if (data) {
+                    document.getElementById('namaTargetUjian').value = data.nama_ujian;
+                } else {
+                    document.getElementById('namaTargetUjian').value = "Ujian Tidak Ditemukan";
+                }
+            }
+            ambilNamaUjian();
+        }
+        // ------------------------------------------------
+
+        // 2. Fungsi saat tombol "Simpan Soal" diklik
+        document.getElementById('formSoal').addEventListener('submit', async function(e) {
+            e.preventDefault(); 
+
+            // Mengambil ID Ujian dari kotak tersembunyi, bukan dari select lagi
+            const ujianId = document.getElementById('idTargetUjian').value;
+            const pertanyaan = document.getElementById('teksSoal').value;
+            const opsiA = document.getElementById('opsiA').value;
+            const opsiB = document.getElementById('opsiB').value;
+            const opsiC = document.getElementById('opsiC').value;
+            const opsiD = document.getElementById('opsiD').value;
+            const kunci = document.getElementById('kunciJawaban').value;
+
+            const btnSubmit = document.querySelector('button[type="submit"]');
+            const teksAsli = btnSubmit.innerHTML;
+            btnSubmit.innerHTML = "Menyimpan Data & Gambar...";
+            btnSubmit.disabled = true;
+
+            try {
+                let urlGambarTerunggah = null;
+
+                const fileInput = document.getElementById('gambarSoal');
+                if (fileInput.files.length > 0) {
+                    const fileGambar = fileInput.files[0];
+                    const namaFileUnik = Date.now() + '-' + fileGambar.name.replace(/\s+/g, '-');
+
+                    const { error: errorUpload } = await supabaseClient
+                        .storage
+                        .from('gambar-soal')
+                        .upload(namaFileUnik, fileGambar);
+
+                    if (errorUpload) throw new Error("Gagal mengunggah gambar: " + errorUpload.message);
+
+                    const { data: dataUrl } = supabaseClient
+                        .storage
+                        .from('gambar-soal')
+                        .getPublicUrl(namaFileUnik);
+
+                    urlGambarTerunggah = dataUrl.publicUrl;
+                }
+
+                // Mengirim ke database
+                const { error: errorDatabase } = await supabaseClient
+                    .from('soal')
+                    .insert([
+                        {
+                            ujian_id: parseInt(ujianId), // Menggunakan ID yang ditangkap dari URL
+                            pertanyaan: pertanyaan,
+                            gambar_url: urlGambarTerunggah, 
+                            opsi_a: opsiA,
+                            opsi_b: opsiB,
+                            opsi_c: opsiC,
+                            opsi_d: opsiD,
+                            kunci_jawaban: kunci
+                        }
+                    ]);
+
+                if (errorDatabase) throw new Error("Gagal menyimpan data ke tabel: " + errorDatabase.message);
+
+                alert("Berhasil! Soal telah tersimpan ke ujian ini.");
+                
+                // Mengosongkan form (kecuali info target ujian)
+                document.getElementById('teksSoal').value = '';
+                document.getElementById('opsiA').value = '';
+                document.getElementById('opsiB').value = '';
+                document.getElementById('opsiC').value = '';
+                document.getElementById('opsiD').value = '';
+                document.getElementById('kunciJawaban').value = '';
+                document.getElementById('gambarSoal').value = '';
+
+            } catch (error) {
+                alert(error.message);
+                console.error("Detail Error:", error);
+            } finally {
+                btnSubmit.innerHTML = teksAsli;
+                btnSubmit.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

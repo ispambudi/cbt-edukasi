@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Login Ujian Siswa</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --border-color: #e5e7eb;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        
+        .app-container { 
+            width: 100%; 
+            max-width: 400px; 
+            background-color: var(--card-bg); 
+            border-radius: 12px; 
+            padding: 2rem 1.5rem; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); 
+        }
+        
+        .logo-area { text-align: center; margin-bottom: 2rem; }
+        .logo-area h1 { color: var(--primary-color); font-size: 1.8rem; margin-bottom: 0.5rem; }
+        .logo-area p { color: gray; font-size: 0.9rem; }
+        
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; }
+        
+        input[type="text"] {
+            width: 100%; 
+            padding: 1rem; 
+            border: 2px solid var(--border-color); 
+            border-radius: 8px; 
+            font-size: 1.1rem;
+        }
+        
+        /* Pengaturan huruf besar otomatis */
+        input#tokenUjian { text-transform: uppercase; }
+        input#namaSiswa, input#kelasSiswa { text-transform: capitalize; }
+        input:focus { outline: none; border-color: var(--primary-color); }
+        
+        .btn-primary {
+            background-color: var(--primary-color); 
+            color: white; 
+            border: none; 
+            padding: 1rem;
+            border-radius: 8px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            width: 100%; 
+            font-size: 1.1rem; 
+            margin-top: 1rem;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-primary:disabled { background-color: gray; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="logo-area">
+            <h1>CBT Edukasi</h1>
+            <p>Portal Ujian Siswa</p>
+        </div>
+
+        <form id="formLoginSiswa">
+            <div class="form-group">
+                <label for="namaSiswa">Nama Lengkap</label>
+                <input type="text" id="namaSiswa" placeholder="Ketik nama Anda..." required autocomplete="off">
+            </div>
+            
+            <!-- KOLOM KELAS SUDAH DITAMBAHKAN DI SINI -->
+            <div class="form-group">
+                <label for="kelasSiswa">Kelas</label>
+                <input type="text" id="kelasSiswa" placeholder="Contoh: 9A" required autocomplete="off">
+            </div>
+            
+            <div class="form-group">
+                <label for="tokenUjian">Token Ujian</label>
+                <input type="text" id="tokenUjian" placeholder="Masukkan 6 Digit Token" required autocomplete="off" maxlength="10">
+            </div>
+            
+            <!-- TOMBOL SUDAH DIPERBAIKI -->
+            <button type="submit" class="btn-primary" id="btnMasuk">Mulai Ujian</button>
+        </form>
+    </div>
+
+    <!-- Script Supabase dari CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        document.getElementById('formLoginSiswa').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const nama = document.getElementById('namaSiswa').value.trim();
+            const kelas = document.getElementById('kelasSiswa').value.trim();
+            const token = document.getElementById('tokenUjian').value.trim().toUpperCase();
+
+            const btnSubmit = document.getElementById('btnMasuk');
+            btnSubmit.innerHTML = "Memeriksa Token...";
+            btnSubmit.disabled = true;
+
+            try {
+                // Cari ujian berdasarkan token
+                const { data, error } = await supabaseClient
+                    .from('ujian')
+                    .select('id, nama_ujian, durasi, is_active')
+                    .eq('token', token)
+                    .single();
+
+                if (error || !data) {
+                    throw new Error("Token tidak ditemukan atau salah ketik.");
+                }
+
+                if (data.is_active !== true) {
+                    throw new Error("Ujian ini belum diaktifkan oleh Guru. Silakan tunggu.");
+                }
+
+                // Simpan sesi ke memori browser
+                sessionStorage.setItem('siswa_nama', nama);
+                sessionStorage.setItem('siswa_kelas', kelas);
+                sessionStorage.setItem('ujian_id', data.id);
+                sessionStorage.setItem('ujian_nama', data.nama_ujian);
+                sessionStorage.setItem('ujian_durasi', data.durasi);
+
+                alert(`Selamat datang, ${nama} (Kelas ${kelas})!\nAnda akan mengerjakan: ${data.nama_ujian}`);
+                window.location.href = 'ruang-ujian.html';
+
+            } catch (error) {
+                alert("Gagal Masuk: " + error.message);
+            } finally {
+                btnSubmit.innerHTML = "Mulai Ujian";
+                btnSubmit.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

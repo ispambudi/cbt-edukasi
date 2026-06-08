@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rekap Nilai - Sistem Ujian</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --border-color: #e5e7eb;
+            --excel-color: #10b981;
+            --pdf-color: #ef4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 2rem; }
+        
+        header {
+            background-color: var(--primary-color); color: white; padding: 1rem 1.5rem;
+            display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .header-nav { display: flex; align-items: center; gap: 1rem; }
+        .btn-back { color: white; text-decoration: none; font-size: 1.2rem; font-weight: bold; }
+
+        .container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        
+        .action-buttons { display: flex; gap: 0.5rem; }
+        .btn-export {
+            color: white; border: none; padding: 0.5rem 1rem;
+            border-radius: 6px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+        }
+        .btn-export:hover { opacity: 0.8; }
+        .btn-excel { background-color: var(--excel-color); }
+        .btn-pdf { background-color: var(--pdf-color); }
+
+        .card {
+            background-color: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        thead { background-color: #f8fafc; border-bottom: 2px solid var(--border-color); }
+        th { padding: 1rem; font-weight: 600; color: #475569; }
+        td { padding: 1rem; border-bottom: 1px solid var(--border-color); }
+        tbody tr:hover { background-color: #f8fafc; }
+
+        .nilai-tinggi { font-weight: bold; color: #10b981; }
+        .nilai-rendah { font-weight: bold; color: #ef4444; }
+        .loading-text { text-align: center; padding: 3rem; color: gray; font-style: italic; }
+
+        @media (max-width: 600px) { table { display: block; overflow-x: auto; white-space: nowrap; } }
+
+        /* PENGATURAN KHUSUS UNTUK EXPORT PDF (Merapikan hasil print) */
+        @media print {
+            body { background-color: white; padding: 0; }
+            header, .action-buttons, .btn-back { display: none !important; }
+            .container { margin: 0; max-width: 100%; }
+            .card { border: none; box-shadow: none; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #000; padding: 8px; }
+            @page { margin: 1cm; size: auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-nav">
+            <a href="dashboard-guru.html" class="btn-back">← Kembali</a>
+            <h1>Rekapitulasi Nilai</h1>
+        </div>
+        <div class="user-profile">Guru</div>
+    </header>
+
+    <div class="container">
+        <div class="dashboard-header">
+            <h2 id="judulUjian">Memuat Data...</h2>
+            <div class="action-buttons">
+                <button onclick="downloadExcel()" class="btn-export btn-excel">⬇ Excel (CSV)</button>
+                <button onclick="downloadPDF()" class="btn-export btn-pdf">⬇ PDF / Print</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <table id="tabelNilai">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Nama Siswa</th>
+                        <th>Kelas</th>
+                        <th>Waktu Selesai</th>
+                        <th>Benar</th>
+                        <th>Nilai Akhir</th>
+                    </tr>
+                </thead>
+                <tbody id="badanTabel">
+                    <tr><td colspan="6" class="loading-text">Sedang mengambil data dari server...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const ujianId = urlParams.get('ujian_id');
+        let namaUjianTitle = "Rekap_Nilai"; // Untuk nama file download
+
+        if (!ujianId) {
+            alert("Harap pilih ujian dari Dashboard!");
+            window.location.href = 'dashboard-guru.html';
+        }
+
+        async function muatDataNilai() {
+            const tbody = document.getElementById('badanTabel');
+            
+            try {
+                const { data: dataUjian } = await supabaseClient.from('ujian').select('nama_ujian').eq('id', ujianId).single();
+                if (dataUjian) {
+                    document.getElementById('judulUjian').innerText = `Nilai: ${dataUjian.nama_ujian}`;
+                    namaUjianTitle = dataUjian.nama_ujian.replace(/[^a-zA-Z0-9]/g, '_'); // Bersihkan karakter aneh untuk nama file
+                }
+
+                const { data: dataNilai, error } = await supabaseClient
+                    .from('nilai')
+                    .select('*')
+                    .eq('ujian_id', ujianId)
+                    .order('kelas', { ascending: true }) // Urutkan berdasarkan kelas dulu
+                    .order('nama_siswa', { ascending: true }); // Lalu abjad nama siswa
+
+                if (error) throw error;
+
+                if (dataNilai.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="loading-text">Belum ada siswa yang menyelesaikan ujian ini.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = ''; 
+                
+                dataNilai.forEach((item, index) => {
+                    const tr = document.createElement('tr');
+                    
+                    const dateObj = new Date(item.waktu_selesai);
+                    const waktuFormat = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' - ' + dateObj.toLocaleDateString('id-ID');
+
+                    let classNilai = 'nilai-tinggi';
+                    if (item.nilai_akhir < 70) classNilai = 'nilai-rendah';
+
+                    tr.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td style="font-weight: 500;">${item.nama_siswa}</td>
+                        <td style="font-weight: bold;">${item.kelas || '-'}</td>
+                        <td>${waktuFormat}</td>
+                        <td>${item.jumlah_benar}</td>
+                        <td class="${classNilai}">${item.nilai_akhir}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color:red; text-align:center; padding:2rem;">Gagal memuat: ${error.message}</td></tr>`;
+            }
+        }
+
+        // FUNGSI DOWNLOAD EXCEL (CSV)
+        function downloadExcel() {
+            let csv = 'No,Nama Siswa,Kelas,Waktu Selesai,Jumlah Benar,Nilai Akhir\n';
+            const rows = document.querySelectorAll('#badanTabel tr');
+            
+            // Cek apakah data kosong
+            if(rows[0].querySelector('td').colSpan == 6) {
+                alert("Belum ada data untuk diunduh!");
+                return;
+            }
+
+            rows.forEach(row => {
+                let rowData = [];
+                const cols = row.querySelectorAll('td');
+                cols.forEach(col => {
+                    // Tambahkan tanda kutip agar data yang ada komanya tidak merusak format Excel
+                    rowData.push('"' + col.innerText + '"'); 
+                });
+                csv += rowData.join(',') + '\n';
+            });
+
+            // Membuat file dan memicu download otomatis
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `Rekap_Nilai_${namaUjianTitle}.csv`);
+            a.click();
+        }
+
+        // FUNGSI DOWNLOAD PDF
+        function downloadPDF() {
+            // Memanfaatkan fitur Print to PDF bawaan browser (Paling rapi dan stabil)
+            window.print();
+        }
+
+        window.onload = muatDataNilai;
+    </script>
+</body>
+</html>

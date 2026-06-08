@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ruang Ujian</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --border-color: #e5e7eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 5rem; }
+        
+        /* Header Tetap di Atas (Sticky) */
+        header {
+            background-color: var(--card-bg); border-bottom: 2px solid var(--primary-color);
+            padding: 1rem; display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .info-siswa h2 { font-size: 1.1rem; color: var(--primary-color); }
+        .info-siswa p { font-size: 0.85rem; color: gray; }
+        
+        .timer-box {
+            background-color: #fee2e2; color: #dc2626; padding: 0.5rem 1rem;
+            border-radius: 8px; font-weight: bold; font-size: 1.2rem; border: 1px solid #f87171;
+        }
+
+        .container { max-width: 600px; margin: 1.5rem auto; padding: 0 1rem; }
+        
+        .card-soal { background-color: var(--card-bg); border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        
+        .nomor-soal { font-weight: bold; font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+        .teks-soal { font-size: 1.1rem; line-height: 1.6; margin-bottom: 1.5rem; white-space: pre-wrap; }
+        .gambar-soal { max-width: 100%; border-radius: 8px; margin-bottom: 1.5rem; display: none; }
+        
+        /* Desain Pilihan Ganda ala Aplikasi */
+        .opsi-list { display: flex; flex-direction: column; gap: 0.8rem; }
+        .opsi-item {
+            display: flex; align-items: center; padding: 1rem; border: 2px solid var(--border-color);
+            border-radius: 8px; cursor: pointer; transition: all 0.2s;
+        }
+        .opsi-item:hover { background-color: #f8fafc; }
+        .opsi-item.terpilih { border-color: var(--primary-color); background-color: #eff6ff; }
+        
+        .opsi-huruf { font-weight: bold; margin-right: 1rem; color: var(--primary-color); }
+        input[type="radio"] { display: none; } /* Sembunyikan radio button asli */
+
+        /* Navigasi Bawah */
+        .nav-bawah {
+            position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 1rem;
+            display: flex; justify-content: space-between; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            max-width: 600px; margin: 0 auto;
+        }
+        
+        button { padding: 0.8rem 1.2rem; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        .btn-prev { background-color: #e5e7eb; color: #374151; }
+        .btn-next { background-color: var(--primary-color); color: white; }
+        .btn-finish { background-color: var(--success); color: white; display: none; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Layar Loading */
+        #loadingScreen { text-align: center; padding: 3rem; font-size: 1.2rem; color: gray; }
+    </style>
+</head>
+<body>
+
+    <header id="headerUjian" style="display: none;">
+        <div class="info-siswa">
+            <h2 id="tampilNamaSiswa">Nama Siswa</h2>
+            <p id="tampilNamaUjian">Memuat Mata Pelajaran...</p>
+        </div>
+        <div class="timer-box" id="timerDisplay">00:00:00</div>
+    </header>
+
+    <div class="container">
+        <div id="loadingScreen">Menyiapkan Lembar Soal...</div>
+        
+        <div class="card-soal" id="ruangSoal" style="display: none;">
+            <div class="nomor-soal" id="nomorSoalDisplay">Soal No. 1</div>
+            <img id="gambarSoalDisplay" class="gambar-soal" src="" alt="Gambar Pendukung">
+            <div class="teks-soal" id="teksSoalDisplay">Memuat pertanyaan...</div>
+            
+            <div class="opsi-list" id="opsiContainer">
+                </div>
+        </div>
+    </div>
+
+    <div class="nav-bawah" id="navigasiUjian" style="display: none;">
+        <button class="btn-prev" id="btnPrev" onclick="gantiSoal(-1)">← Sebelumnya</button>
+        <button class="btn-next" id="btnNext" onclick="gantiSoal(1)">Selanjutnya →</button>
+        <button class="btn-finish" id="btnFinish" onclick="selesaiUjian()">Kumpulkan Jawaban</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Mengambil data dari sessionStorage (yang disimpan saat login)
+        const idUjianSiswa = sessionStorage.getItem('ujian_id');
+        const namaSiswa = sessionStorage.getItem('siswa_nama');
+        const kelasSiswa = sessionStorage.getItem('siswa_kelas'); // Baris Baru
+        const namaUjian = sessionStorage.getItem('ujian_nama');
+        const durasiMenit = parseInt(sessionStorage.getItem('ujian_durasi'));
+
+        // Keamanan: Tendang kembali ke login jika masuk tanpa izin
+        if (!idUjianSiswa || !namaSiswa) {
+            alert("Sesi tidak valid! Silakan login terlebih dahulu.");
+            window.location.href = 'login-siswa.html';
+        }
+
+        // Variabel global untuk menyimpan state ujian
+        let daftarSoal = [];
+        let indexSoalAktif = 0;
+        let jawabanSiswa = {}; // Format: { id_soal: 'A', id_soal2: 'C' }
+        let sisaWaktuDetik = durasiMenit * 60;
+        let timerInterval;
+
+        // Tampilkan info di Header
+        document.getElementById('tampilNamaSiswa').innerText = namaSiswa;
+        document.getElementById('tampilNamaUjian').innerText = namaUjian;
+
+        // 1. Fungsi Mengambil Soal dari Database
+        async function mulaiSistem() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('soal')
+                    .select('*')
+                    .eq('ujian_id', idUjianSiswa)
+                    .order('created_at', { ascending: true }); // Tetap pertahankan urutan yang sudah guru atur
+
+                if (error) throw error;
+                if (data.length === 0) throw new Error("Belum ada soal pada ujian ini.");
+
+                daftarSoal = data;
+                
+                // Sembunyikan loading, tampilkan antarmuka ujian
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('headerUjian').style.display = 'flex';
+                document.getElementById('ruangSoal').style.display = 'block';
+                document.getElementById('navigasiUjian').style.display = 'flex';
+
+                renderSoal(); // Tampilkan soal pertama
+                mulaiTimer(); // Jalankan waktu mundur
+
+            } catch (err) {
+                document.getElementById('loadingScreen').innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+            }
+        }
+
+        // 2. Fungsi Menampilkan Soal ke Layar
+        function renderSoal() {
+            const soalAktif = daftarSoal[indexSoalAktif];
+            
+            // Teks dan Nomor
+            document.getElementById('nomorSoalDisplay').innerText = `Soal No. ${indexSoalAktif + 1} dari ${daftarSoal.length}`;
+            document.getElementById('teksSoalDisplay').innerText = soalAktif.pertanyaan;
+
+            // Gambar (Tampilkan jika ada, sembunyikan jika kosong)
+            const imgEl = document.getElementById('gambarSoalDisplay');
+            if (soalAktif.gambar_url) {
+                imgEl.src = soalAktif.gambar_url;
+                imgEl.style.display = 'block';
+            } else {
+                imgEl.style.display = 'none';
+            }
+
+            // Pilihan Ganda (A, B, C, D)
+            const container = document.getElementById('opsiContainer');
+            container.innerHTML = ''; // Bersihkan pilihan sebelumnya
+
+            const opsiArray = [
+                { huruf: 'A', teks: soalAktif.opsi_a },
+                { huruf: 'B', teks: soalAktif.opsi_b },
+                { huruf: 'C', teks: soalAktif.opsi_c },
+                { huruf: 'D', teks: soalAktif.opsi_d }
+            ];
+
+            opsiArray.forEach(opsi => {
+                const divItem = document.createElement('label');
+                divItem.className = 'opsi-item';
+                
+                // Beri warna biru jika opsi ini pernah dipilih siswa sebelumnya
+                if (jawabanSiswa[soalAktif.id] === opsi.huruf) {
+                    divItem.classList.add('terpilih');
+                }
+
+                divItem.innerHTML = `
+                    <span class="opsi-huruf">${opsi.huruf}</span>
+                    <span class="opsi-teks">${opsi.teks}</span>
+                    <input type="radio" name="jawaban" value="${opsi.huruf}" onchange="simpanJawaban('${soalAktif.id}', '${opsi.huruf}')" ${jawabanSiswa[soalAktif.id] === opsi.huruf ? 'checked' : ''}>
+                `;
+                container.appendChild(divItem);
+            });
+
+            aturTombolNavigasi();
+        }
+
+        // 3. Fungsi Menyimpan Pilihan Siswa ke Memori Sementara
+        window.simpanJawaban = function(idSoal, hurufDipilih) {
+            jawabanSiswa[idSoal] = hurufDipilih;
+            renderSoal(); // Render ulang agar opsi yang dipilih berubah warna menjadi biru
+        }
+
+        // 4. Fungsi Navigasi (Maju/Mundur)
+        window.gantiSoal = function(arah) {
+            indexSoalAktif += arah;
+            renderSoal();
+            window.scrollTo(0, 0); // Scroll ke atas tiap ganti soal
+        }
+
+        function aturTombolNavigasi() {
+            document.getElementById('btnPrev').disabled = (indexSoalAktif === 0);
+            
+            // Jika ini soal terakhir, sembunyikan tombol Next, munculkan tombol Kumpulkan
+            if (indexSoalAktif === daftarSoal.length - 1) {
+                document.getElementById('btnNext').style.display = 'none';
+                document.getElementById('btnFinish').style.display = 'block';
+            } else {
+                document.getElementById('btnNext').style.display = 'block';
+                document.getElementById('btnFinish').style.display = 'none';
+            }
+        }
+
+        // 5. Timer Mundur
+        function mulaiTimer() {
+            timerInterval = setInterval(() => {
+                if (sisaWaktuDetik <= 0) {
+                    clearInterval(timerInterval);
+                    alert("Waktu Habis! Jawaban Anda akan dikumpulkan otomatis.");
+                    prosesPenilaian();
+                    return;
+                }
+                sisaWaktuDetik--;
+                
+                const jam = Math.floor(sisaWaktuDetik / 3600);
+                const menit = Math.floor((sisaWaktuDetik % 3600) / 60);
+                const detik = sisaWaktuDetik % 60;
+                
+                document.getElementById('timerDisplay').innerText = 
+                    `${String(jam).padStart(2, '0')}:${String(menit).padStart(2, '0')}:${String(detik).padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        // 6. Tombol Kumpulkan Jawaban Manual
+        window.selesaiUjian = function() {
+            const jumlahDijawab = Object.keys(jawabanSiswa).length;
+            if (jumlahDijawab < daftarSoal.length) {
+                if (!confirm(`Ada ${daftarSoal.length - jumlahDijawab} soal yang belum dijawab. Yakin ingin mengumpulkan sekarang?`)) {
+                    return; // Batal mengumpulkan
+                }
+            } else {
+                if (!confirm("Apakah Anda yakin sudah selesai dan ingin mengumpulkan jawaban?")) return;
+            }
+            prosesPenilaian();
+        }
+
+// 7. Hitung dan Simpan Nilai Akhir ke Database
+        async function prosesPenilaian() {
+            clearInterval(timerInterval);
+            document.getElementById('navigasiUjian').style.display = 'none';
+            
+            // Ubah tampilan menjadi proses menyimpan
+            document.getElementById('ruangSoal').innerHTML = '<div style="text-align:center; padding: 3rem;"><h2>Sedang Menyimpan Nilai... ⏳</h2><p>Mohon jangan tutup aplikasi ini.</p></div>';
+
+            let jumlahBenar = 0;
+            
+            // Cek satu per satu jawaban siswa vs kunci jawaban dari database
+            daftarSoal.forEach(soal => {
+                if (jawabanSiswa[soal.id] === soal.kunci_jawaban) {
+                    jumlahBenar++;
+                }
+            });
+
+            // Rumus Nilai: (Benar / Total Soal) x 100
+            const nilaiAkhir = Math.round((jumlahBenar / daftarSoal.length) * 100);
+
+            try {
+                // KIRIM DATA KE TABEL 'nilai' DI SUPABASE
+                const { error } = await supabaseClient
+                    .from('nilai')
+                    .insert([
+                        { 
+                            ujian_id: parseInt(idUjianSiswa), 
+                            nama_siswa: namaSiswa,
+                            kelas: kelasSiswa, // Baris Baru
+                            jumlah_benar: jumlahBenar,
+                            nilai_akhir: nilaiAkhir
+                        }
+                    ]);
+
+                if (error) throw error;
+
+                // Tampilkan hasil jika berhasil disimpan
+                alert(`UJIAN SELESAI!\n\nNama: ${namaSiswa}\nBenar: ${jumlahBenar} dari ${daftarSoal.length} soal\n\nNILAI ANDA: ${nilaiAkhir}\n\n(Nilai Anda telah berhasil dikirim ke Guru)`);
+
+            } catch (error) {
+                alert("Peringatan: Gagal menyimpan nilai ke database! Error: " + error.message);
+                console.error(error);
+            } finally {
+                // Hapus sesi agar siswa tidak bisa menekan tombol "Back" dan mengerjakan ulang
+                sessionStorage.clear();
+                window.location.href = 'login-siswa.html';
+            }
+        }
+
+        // Jalankan aplikasi saat file dibuka
+        window.onload = mulaiSistem;
+    </script>
+</body>
+</html>

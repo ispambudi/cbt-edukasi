@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Guru - Sistem Ujian</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --border-color: #e5e7eb;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 2rem; }
+        
+        header {
+            background-color: var(--primary-color); color: white; padding: 1rem 1.5rem;
+            display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .header-nav { display: flex; align-items: center; gap: 1rem; }
+        
+        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        
+        .btn-primary {
+            background-color: var(--primary-color); color: white; border: none; padding: 0.6rem 1.2rem;
+            border-radius: 6px; font-weight: 600; cursor: pointer; text-decoration: none;
+        }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        
+        .exam-card {
+            background-color: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .exam-info { margin-bottom: 1rem; }
+        .exam-info h3 { margin-bottom: 0.5rem; color: var(--primary-color); }
+        
+        .exam-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; border-top: 1px solid var(--border-color); padding-top: 1rem; }
+        .btn-outline {
+            background-color: transparent; border: 1px solid var(--border-color); padding: 0.4rem 0.8rem;
+            border-radius: 6px; cursor: pointer; transition: 0.2s; text-decoration: none; color: var(--text-main);
+            font-size: 0.9rem; font-weight: 500;
+        }
+        .btn-outline:hover { background-color: #f3f4f6; }
+        
+        /* Desain Lencana Status */
+        .badge-aktif { background-color: #10b981; color: white; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .badge-nonaktif { background-color: #6b7280; color: white; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>CBT Edukasi</h1>
+        <div class="header-nav">
+            <div class="user-profile" style="color: white; font-weight: bold;">Guru</div>
+            <button id="btnKeluar" style="background: transparent; border: 1px solid white; color: white; padding: 0.3rem 0.8rem; border-radius: 4px; cursor: pointer;">Keluar</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="dashboard-header">
+            <h2>Daftar Ujian</h2>
+            <a href="buat-ujian.html" class="btn-primary">+ Buat Ujian Baru</a>
+        </div>
+
+        <div id="daftarUjianContainer">
+            <div style="text-align:center; padding: 2rem; color: gray;">Memuat data ujian...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // 1. Pengecekan Sesi Login
+        async function cekSesiLogin() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                window.location.href = 'login.html';
+            }
+        }
+
+        // 2. Fitur Keluar (Logout)
+        document.getElementById('btnKeluar').addEventListener('click', async function() {
+            if (confirm("Apakah Anda yakin ingin keluar?")) {
+                await supabaseClient.auth.signOut();
+                window.location.href = 'login.html';
+            }
+        });
+
+        // 3. Mengambil Data dan Mencetak Kotak Ujian
+        async function ambilDataUjian() {
+            const container = document.getElementById('daftarUjianContainer');
+            try {
+                const { data, error } = await supabaseClient
+                    .from('ujian')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                container.innerHTML = '';
+
+                if (data.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding: 2rem; color: gray;">Belum ada ujian yang dibuat. Silakan klik "Buat Ujian Baru".</div>';
+                    return;
+                }
+
+                data.forEach(ujian => {
+                    const card = document.createElement('div');
+                    card.className = 'exam-card';
+                    
+                    // Menentukan lencana status & tombol aktivasi
+                    let statusHtml = '';
+                    let tombolAktivasiHtml = '';
+
+                    if (ujian.is_active) {
+                        statusHtml = `<span class="badge-aktif">Aktif | Token: ${ujian.token}</span>`;
+                        tombolAktivasiHtml = `<button onclick="ubahStatusUjian(${ujian.id}, false)" class="btn-outline" style="color: #ef4444; border-color: #ef4444; font-weight: bold;">Tutup Ujian</button>`;
+                    } else {
+                        statusHtml = `<span class="badge-nonaktif">Nonaktif</span>`;
+                        tombolAktivasiHtml = `<button onclick="ubahStatusUjian(${ujian.id}, true)" class="btn-outline" style="color: #10b981; border-color: #10b981; font-weight: bold;">Aktifkan & Buat Token</button>`;
+                    }
+
+                    card.innerHTML = `
+                        <div class="exam-info">
+                            <h3>${ujian.nama_ujian}</h3>
+                            <p style="margin-bottom: 0.5rem; color: gray; font-size: 0.9rem;">
+                                Durasi: ${ujian.durasi} Menit | Status: ${statusHtml}
+                            </p>
+                        </div>
+                        <div class="exam-actions">
+                            ${tombolAktivasiHtml}
+                            <a href="buat-soal.html?ujian_id=${ujian.id}" class="btn-outline">Tambah Soal</a>
+                            <a href="daftar-soal.html?ujian_id=${ujian.id}" class="btn-outline">Daftar Soal</a>
+                            <a href="rekap-nilai.html?ujian_id=${ujian.id}" class="btn-outline">Lihat Nilai</a>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (error) {
+                container.innerHTML = `<div style="color: red; padding: 1rem;">Gagal memuat data: ${error.message}</div>`;
+            }
+        }
+
+        // 4. Fitur Sakelar Pembangkit Token
+        window.ubahStatusUjian = async function(idUjian, isAktif) {
+            try {
+                let dataUpdate = {};
+                
+                if (isAktif) {
+                    // Ciptakan Token acak 6 karakter (Kombinasi Huruf & Angka)
+                    const karakter = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                    let tokenBaru = '';
+                    for (let i = 0; i < 6; i++) {
+                        tokenBaru += karakter.charAt(Math.floor(Math.random() * karakter.length));
+                    }
+                    
+                    if (!confirm(`Ujian akan diaktifkan dengan Token:\n\n [ ${tokenBaru} ] \n\nLanjutkan?`)) return;
+                    
+                    dataUpdate = { is_active: true, token: tokenBaru };
+                } else {
+                    if (!confirm("Tutup ujian ini? Siswa yang belum masuk tidak akan bisa mengaksesnya lagi.")) return;
+                    
+                    // Kosongkan token saat ditutup agar aman
+                    dataUpdate = { is_active: false, token: null };
+                }
+
+                // Tampilkan efek memuat sementara
+                document.getElementById('daftarUjianContainer').innerHTML = '<div style="text-align:center; padding: 2rem; color: gray;">Memproses sistem keamanan...</div>';
+
+                // Kirim perubahan ke database
+                const { error } = await supabaseClient
+                    .from('ujian')
+                    .update(dataUpdate)
+                    .eq('id', idUjian);
+
+                if (error) throw error;
+
+                // Segarkan layar otomatis
+                ambilDataUjian();
+
+            } catch (error) {
+                alert("Gagal merubah status: " + error.message);
+                ambilDataUjian();
+            }
+        }
+
+        // Jalankan pelindung login & muat data saat file dibuka
+        window.addEventListener('DOMContentLoaded', async () => {
+            await cekSesiLogin();
+            ambilDataUjian();
+        });
+    </script>
+</body>
+</html>

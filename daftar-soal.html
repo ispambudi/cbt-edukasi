@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar Soal - Sistem Ujian</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --danger-color: #dc2626;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 2rem; }
+        
+        header {
+            background-color: var(--primary-color); color: white; padding: 1rem 1.5rem;
+            display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .header-nav { display: flex; align-items: center; gap: 1rem; }
+        .btn-back { color: white; text-decoration: none; font-size: 1.2rem; font-weight: bold; }
+        
+        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .btn-primary {
+            background-color: var(--primary-color); color: white; border: none; padding: 0.6rem 1.2rem;
+            border-radius: 6px; font-weight: 600; cursor: pointer; text-decoration: none;
+        }
+        
+        .card {
+            background-color: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .soal-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-bottom: 1rem; font-weight: bold; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);
+        }
+        
+        /* Gaya untuk tombol navigasi naik/turun */
+        .urutan-controls { display: flex; gap: 0.5rem; }
+        .btn-urutan {
+            background-color: #f3f4f6; border: 1px solid var(--border-color); padding: 0.2rem 0.6rem;
+            border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: bold; color: var(--text-main);
+        }
+        .btn-urutan:hover:not(:disabled) { background-color: #e5e7eb; }
+        .btn-urutan:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .soal-teks { white-space: pre-wrap; margin-bottom: 1rem; }
+        .soal-gambar { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 1rem; display: block; }
+        
+        .opsi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .opsi-item { padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; }
+        .opsi-benar { background-color: #dbeafe; border-color: var(--primary-color); font-weight: bold; color: var(--primary-hover); }
+
+        .card-actions { display: flex; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem; }
+        .btn-outline {
+            background-color: transparent; border: 1px solid var(--border-color); padding: 0.4rem 0.8rem;
+            border-radius: 6px; cursor: pointer; transition: 0.2s; text-decoration: none; color: var(--text-main);
+        }
+        .btn-outline:hover { background-color: #f3f4f6; }
+        .btn-danger { color: var(--danger-color); border-color: var(--danger-color); }
+        .btn-danger:hover { background-color: #fef2f2; }
+
+        @media (max-width: 600px) { .opsi-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-nav">
+            <a href="dashboard-guru.html" class="btn-back">← Kembali</a>
+            <h1>Bank Soal</h1>
+        </div>
+        <div class="user-profile">Guru</div>
+    </header>
+
+    <div class="container">
+        <div class="dashboard-header">
+            <h2 id="judulUjian">Memuat...</h2>
+            <a href="#" id="btnTambahSoal" class="btn-primary">+ Tambah Soal</a>
+        </div>
+
+        <div id="listSoalContainer">
+            <div style="text-align:center; padding: 2rem; color: gray;">Sedang mengambil data soal...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const ujianId = urlParams.get('ujian_id');
+
+        if (!ujianId) {
+            alert("Pilih ujian terlebih dahulu!");
+            window.location.href = 'dashboard-guru.html';
+        }
+
+        document.getElementById('btnTambahSoal').href = `buat-soal.html?ujian_id=${ujianId}`;
+
+        // Variabel global untuk menyimpan daftar soal agar mudah ditukar
+        let dataSoalGlobal = [];
+
+        async function muatDaftarSoal() {
+            const container = document.getElementById('listSoalContainer');
+
+            try {
+                // Ambil Nama Ujian
+                const { data: dataUjian } = await supabaseClient.from('ujian').select('nama_ujian').eq('id', ujianId).single();
+                if (dataUjian) document.getElementById('judulUjian').innerText = `Soal: ${dataUjian.nama_ujian}`;
+
+                // PERUBAHAN PENTING: Kita urutkan berdasarkan created_at, bukan id
+                const { data: dataSoal, error } = await supabaseClient
+                    .from('soal')
+                    .select('*')
+                    .eq('ujian_id', ujianId)
+                    .order('created_at', { ascending: true }); 
+
+                if (error) throw error;
+
+                dataSoalGlobal = dataSoal; // Simpan ke variabel global
+                container.innerHTML = '';
+
+                if (dataSoal.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding:2rem; background:white; border-radius:8px;">Belum ada soal. Silakan klik tombol + Tambah Soal.</div>';
+                    return;
+                }
+
+                // Tampilkan soal dengan tambahan tombol Naik/Turun
+                dataSoal.forEach((soal, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    
+                    const imgHtml = soal.gambar_url ? `<img src="${soal.gambar_url}" class="soal-gambar" alt="Gambar Soal">` : '';
+                    
+                    // Logika tombol: Soal pertama tidak bisa naik, soal terakhir tidak bisa turun
+                    const tombolNaikDisabled = index === 0 ? 'disabled' : '';
+                    const tombolTurunDisabled = index === dataSoal.length - 1 ? 'disabled' : '';
+
+                    card.innerHTML = `
+                        <div class="soal-header">
+                            <span>Soal No. ${index + 1}</span>
+                            <div class="urutan-controls">
+                                <button onclick="geserSoal(${index}, -1)" class="btn-urutan" ${tombolNaikDisabled} title="Naikkan Urutan">↑</button>
+                                <button onclick="geserSoal(${index}, 1)" class="btn-urutan" ${tombolTurunDisabled} title="Turunkan Urutan">↓</button>
+                            </div>
+                        </div>
+                        <div class="soal-teks">${soal.pertanyaan}</div>
+                        ${imgHtml}
+                        <div class="opsi-grid">
+                            <div class="opsi-item ${soal.kunci_jawaban === 'A' ? 'opsi-benar' : ''}">A. ${soal.opsi_a}</div>
+                            <div class="opsi-item ${soal.kunci_jawaban === 'B' ? 'opsi-benar' : ''}">B. ${soal.opsi_b}</div>
+                            <div class="opsi-item ${soal.kunci_jawaban === 'C' ? 'opsi-benar' : ''}">C. ${soal.opsi_c}</div>
+                            <div class="opsi-item ${soal.kunci_jawaban === 'D' ? 'opsi-benar' : ''}">D. ${soal.opsi_d}</div>
+                        </div>
+                        <div class="card-actions">
+                            <button onclick="editSoal(${soal.id})" class="btn-outline">Edit Soal</button>
+                            <button onclick="hapusSoal(${soal.id})" class="btn-outline btn-danger">Hapus</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+
+            } catch (error) {
+                container.innerHTML = `<div style="color:red; text-align:center;">Gagal memuat soal: ${error.message}</div>`;
+            }
+        }
+
+        // FUNGSI BARU: Menggeser soal dengan menukar 'created_at'
+        window.geserSoal = async function(indexSaatIni, arah) {
+            const indexTujuan = indexSaatIni + arah;
+            const soalA = dataSoalGlobal[indexSaatIni];
+            const soalB = dataSoalGlobal[indexTujuan];
+
+            // Ubah tampilan jadi memuat sementara
+            document.getElementById('listSoalContainer').innerHTML = '<div style="text-align:center; padding: 2rem; color: gray;">Memindahkan urutan soal...</div>';
+
+            try {
+                // Kita tukar waktu pembuatannya (created_at) di database
+                const prosesTukarA = supabaseClient.from('soal').update({ created_at: soalB.created_at }).eq('id', soalA.id);
+                const prosesTukarB = supabaseClient.from('soal').update({ created_at: soalA.created_at }).eq('id', soalB.id);
+
+                // Jalankan keduanya secara bersamaan
+                await Promise.all([prosesTukarA, prosesTukarB]);
+
+                // Muat ulang daftar soal agar nomornya rapi kembali
+                muatDaftarSoal();
+            } catch (error) {
+                alert("Gagal memindahkan urutan: " + error.message);
+                muatDaftarSoal(); // Kembalikan tampilan semula
+            }
+        }
+
+        window.hapusSoal = async function(idSoal) {
+            if (confirm("Apakah Anda yakin ingin menghapus soal ini?")) {
+                const { error } = await supabaseClient.from('soal').delete().eq('id', idSoal);
+                if (error) alert("Gagal menghapus: " + error.message);
+                else muatDaftarSoal(); 
+            }
+        }
+
+        window.editSoal = function(idSoal) {
+            window.location.href = `edit-soal.html?soal_id=${idSoal}&ujian_id=${ujianId}`;
+        }
+
+        window.onload = muatDaftarSoal;
+    </script>
+</body>
+</html>

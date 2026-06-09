@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pantau Live Ujian</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f3f4f6; margin: 0; padding: 2rem; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #1f2937; margin-top: 0; }
+        .info-box { background: #eff6ff; padding: 1rem; border-radius: 6px; border: 1px solid #bfdbfe; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;}
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background-color: #f8fafc; color: #4b5563; }
+        .status-aman { color: #10b981; font-weight: bold; }
+        .status-bahaya { color: #ef4444; font-weight: bold; background: #fef2f2; padding: 0.3rem 0.6rem; border-radius: 4px;}
+        .status-selesai { color: #6b7280; font-style: italic; }
+        .btn-kembali { display: inline-block; margin-bottom: 1rem; text-decoration: none; color: #2563eb; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="dashboard-guru.html" class="btn-kembali">&larr; Kembali ke Dashboard</a>
+        <h2>👁️ Monitor Ujian Live</h2>
+        <div class="info-box">
+            <div>
+                <strong>Status:</strong> <span style="color: #2563eb;">🔴 Live Auto-Refresh (Tiap 3 Detik)</span>
+            </div>
+            <div id="waktuUpdate" style="font-size: 0.9rem; color: gray;">Memuat radar...</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Nama Siswa</th>
+                    <th>Kelas</th>
+                    <th>Status Pengerjaan</th>
+                    <th>Peringatan (Keluar Layar)</th>
+                </tr>
+            </thead>
+            <tbody id="tabelSiswa">
+                <tr><td colspan="4" style="text-align: center;">Menghubungkan ke kamera pengawas...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const idUjian = urlParams.get('ujian_id');
+
+        async function ambilDataLive() {
+            if (!idUjian) return;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('pantau_live')
+                    .select('*')
+                    .eq('ujian_id', idUjian)
+                    .order('terakhir_aktif', { ascending: false });
+
+                if (error) throw error;
+
+                const tbody = document.getElementById('tabelSiswa');
+                tbody.innerHTML = '';
+
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: gray;">Belum ada siswa yang masuk ke ujian ini.</td></tr>';
+                } else {
+                    data.forEach(siswa => {
+                        const tr = document.createElement('tr');
+                        
+                        let gayaPeringatan = 'status-aman';
+                        let teksPeringatan = '✔️ Aman (0)';
+                        
+                        // Jika siswa curang pindah layar
+                        if (siswa.jumlah_pelanggaran > 0) {
+                            gayaPeringatan = 'status-bahaya';
+                            teksPeringatan = `🚨 Curang! (${siswa.jumlah_pelanggaran} Kali)`;
+                        }
+                        
+                        if (siswa.status === 'Selesai') {
+                            gayaPeringatan = 'status-selesai';
+                            teksPeringatan = `Terkunci (${siswa.jumlah_pelanggaran})`;
+                        }
+
+                        tr.innerHTML = `
+                            <td style="font-weight: 500;">${siswa.nama_siswa}</td>
+                            <td>${siswa.kelas}</td>
+                            <td>
+                                <span class="${siswa.status === 'Sedang Mengerjakan' ? 'status-aman' : 'status-selesai'}">
+                                    ${siswa.status}
+                                </span>
+                            </td>
+                            <td><span class="${gayaPeringatan}">${teksPeringatan}</span></td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+                
+                const now = new Date();
+                document.getElementById('waktuUpdate').innerText = "Pembaruan terakhir: " + now.toLocaleTimeString();
+
+            } catch (err) {
+                console.error("Gagal mengambil data live:", err);
+            }
+        }
+
+        if (!idUjian) {
+            alert("ID Ujian tidak ditemukan!");
+            window.location.href = 'dashboard-guru.html';
+        } else {
+            ambilDataLive();
+            // Mesin auto-refresh setiap 3 detik
+            setInterval(ambilDataLive, 3000); 
+        }
+    </script>
+</body>
+</html>

@@ -114,6 +114,7 @@
         const kelasSiswa = sessionStorage.getItem('siswa_kelas'); // Baris Baru
         const namaUjian = sessionStorage.getItem('ujian_nama');
         const durasiMenit = parseInt(sessionStorage.getItem('ujian_durasi'));
+        const isUjianDiacak = sessionStorage.getItem('ujian_acak') === 'true';
 
         // Keamanan: Tendang kembali ke login jika masuk tanpa izin
         if (!idUjianSiswa || !namaSiswa) {
@@ -132,28 +133,37 @@
         document.getElementById('tampilNamaSiswa').innerText = namaSiswa;
         document.getElementById('tampilNamaUjian').innerText = namaUjian;
 
-        // 1. Fungsi Mengambil Soal dari Database
+  // Fungsi Algoritma Pengacak (Fisher-Yates)
+        function acakArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // 1. Fungsi Mengambil Soal
         async function mulaiSistem() {
             try {
                 const { data, error } = await supabaseClient
                     .from('soal')
                     .select('*')
                     .eq('ujian_id', idUjianSiswa)
-                    .order('created_at', { ascending: true }); // Tetap pertahankan urutan yang sudah guru atur
+                    .order('created_at', { ascending: true }); 
 
                 if (error) throw error;
                 if (data.length === 0) throw new Error("Belum ada soal pada ujian ini.");
 
-                daftarSoal = data;
+                // JIKA MODE ACAK AKTIF, ACAK URUTAN SOALNYA
+                daftarSoal = isUjianDiacak ? acakArray([...data]) : data;
                 
-                // Sembunyikan loading, tampilkan antarmuka ujian
                 document.getElementById('loadingScreen').style.display = 'none';
                 document.getElementById('headerUjian').style.display = 'flex';
                 document.getElementById('ruangSoal').style.display = 'block';
                 document.getElementById('navigasiUjian').style.display = 'flex';
 
-                renderSoal(); // Tampilkan soal pertama
-                mulaiTimer(); // Jalankan waktu mundur
+                renderSoal(); 
+                mulaiTimer(); 
 
             } catch (err) {
                 document.getElementById('loadingScreen').innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
@@ -164,11 +174,9 @@
         function renderSoal() {
             const soalAktif = daftarSoal[indexSoalAktif];
             
-            // Teks dan Nomor
             document.getElementById('nomorSoalDisplay').innerText = `Soal No. ${indexSoalAktif + 1} dari ${daftarSoal.length}`;
             document.getElementById('teksSoalDisplay').innerText = soalAktif.pertanyaan;
 
-            // Gambar (Tampilkan jika ada, sembunyikan jika kosong)
             const imgEl = document.getElementById('gambarSoalDisplay');
             if (soalAktif.gambar_url) {
                 imgEl.src = soalAktif.gambar_url;
@@ -177,30 +185,41 @@
                 imgEl.style.display = 'none';
             }
 
-            // Pilihan Ganda (A, B, C, D)
             const container = document.getElementById('opsiContainer');
-            container.innerHTML = ''; // Bersihkan pilihan sebelumnya
+            container.innerHTML = ''; 
 
-            const opsiArray = [
-                { huruf: 'A', teks: soalAktif.opsi_a },
-                { huruf: 'B', teks: soalAktif.opsi_b },
-                { huruf: 'C', teks: soalAktif.opsi_c },
-                { huruf: 'D', teks: soalAktif.opsi_d }
+            // Siapkan opsi asli beserta ID huruf aslinya untuk dikirim ke kunci jawaban
+            let opsiArray = [
+                { id_asli: 'A', teks: soalAktif.opsi_a },
+                { id_asli: 'B', teks: soalAktif.opsi_b },
+                { id_asli: 'C', teks: soalAktif.opsi_c },
+                { id_asli: 'D', teks: soalAktif.opsi_d }
             ];
 
-            opsiArray.forEach(opsi => {
+            // JIKA MODE ACAK AKTIF, ACAK POSISI JAWABANNYA
+            if (isUjianDiacak) {
+                opsiArray = acakArray(opsiArray);
+            }
+
+            // Render ke layar dengan label A, B, C, D yang selalu urut secara visual
+            const labelVisual = ['A', 'B', 'C', 'D'];
+            
+            opsiArray.forEach((opsi, index) => {
+                const hurufTampil = labelVisual[index]; // Visual selalu A, B, C, D
+                const hurufData = opsi.id_asli; // Data yang dikirim tetap aslinya (misal opsi C)
+
                 const divItem = document.createElement('label');
                 divItem.className = 'opsi-item';
                 
-                // Beri warna biru jika opsi ini pernah dipilih siswa sebelumnya
-                if (jawabanSiswa[soalAktif.id] === opsi.huruf) {
+                // Cek apakah siswa sudah menjawab opsi ini sebelumnya
+                if (jawabanSiswa[soalAktif.id] === hurufData) {
                     divItem.classList.add('terpilih');
                 }
 
                 divItem.innerHTML = `
-                    <span class="opsi-huruf">${opsi.huruf}</span>
+                    <span class="opsi-huruf">${hurufTampil}</span>
                     <span class="opsi-teks">${opsi.teks}</span>
-                    <input type="radio" name="jawaban" value="${opsi.huruf}" onchange="simpanJawaban('${soalAktif.id}', '${opsi.huruf}')" ${jawabanSiswa[soalAktif.id] === opsi.huruf ? 'checked' : ''}>
+                    <input type="radio" name="jawaban" value="${hurufData}" onchange="simpanJawaban('${soalAktif.id}', '${hurufData}')" ${jawabanSiswa[soalAktif.id] === hurufData ? 'checked' : ''}>
                 `;
                 container.appendChild(divItem);
             });

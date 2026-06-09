@@ -20,7 +20,6 @@
         
         body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 5rem; }
         
-        /* Header Tetap di Atas (Sticky) */
         header {
             background-color: var(--card-bg); border-bottom: 2px solid var(--primary-color);
             padding: 1rem; display: flex; justify-content: space-between; align-items: center;
@@ -43,7 +42,6 @@
         .teks-soal { font-size: 1.1rem; line-height: 1.6; margin-bottom: 1.5rem; white-space: pre-wrap; }
         .gambar-soal { max-width: 100%; border-radius: 8px; margin-bottom: 1.5rem; display: none; }
         
-        /* Desain Pilihan Ganda ala Aplikasi */
         .opsi-list { display: flex; flex-direction: column; gap: 0.8rem; }
         .opsi-item {
             display: flex; align-items: center; padding: 1rem; border: 2px solid var(--border-color);
@@ -55,7 +53,6 @@
         .opsi-huruf { font-weight: bold; margin-right: 1rem; color: var(--primary-color); }
         input[type="radio"] { display: none; } 
 
-        /* Navigasi Bawah */
         .nav-bawah {
             position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 1rem;
             display: flex; justify-content: space-between; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
@@ -68,7 +65,6 @@
         .btn-finish { background-color: var(--success); color: white; display: none; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Layar Loading */
         #loadingScreen { text-align: center; padding: 3rem; font-size: 1.2rem; color: gray; }
     </style>
 </head>
@@ -90,7 +86,7 @@
     </div>
 
     <div class="container">
-        <div id="loadingScreen">Menyiapkan Lembar Soal...</div>
+        <div id="loadingScreen">Menyiapkan Lembar Soal...<br><br><span style="font-size:0.9rem; color:blue;">Ketuk layar di mana saja untuk mengunci tampilan penuh.</span></div>
         
         <div class="card-soal" id="ruangSoal" style="display: none;">
             <div class="nomor-soal" id="nomorSoalDisplay">Soal No. 1</div>
@@ -128,20 +124,34 @@
             window.location.href = 'login-siswa.html';
         }
 
-        // --- 2. VARIABEL GLOBAL UJIAN ---
+        // --- 2. MANAGEMENT MEMORI MEMANCING AMNESIA REFRESH ---
         let daftarSoal = [];
-        let indexSoalAktif = 0;
-        let jawabanSiswa = {}; 
-        let sisaWaktuDetik = (durasiMenit && !isNaN(durasiMenit)) ? durasiMenit * 60 : 3600;
+        let indexSoalAktif = sessionStorage.getItem('cbt_index_aktif') ? parseInt(sessionStorage.getItem('cbt_index_aktif')) : 0;
+        let jawabanSiswa = sessionStorage.getItem('cbt_jawaban') ? JSON.parse(sessionStorage.getItem('cbt_jawaban')) : {}; 
+        let sisaWaktuDetik = sessionStorage.getItem('cbt_sisa_waktu') ? parseInt(sessionStorage.getItem('cbt_sisa_waktu')) : ((durasiMenit && !isNaN(durasiMenit)) ? durasiMenit * 60 : 3600);
+        
+        let idPantauLive = sessionStorage.getItem('cbt_id_pantau') ? parseInt(sessionStorage.getItem('cbt_id_pantau')) : null;
+        let jumlahPelanggaran = sessionStorage.getItem('cbt_pelanggaran') ? parseInt(sessionStorage.getItem('cbt_pelanggaran')) : 0;
+        
         let timerInterval;
-
-        // Variabel Monitor Radar
-        let idPantauLive = null;
-        let jumlahPelanggaran = 0;
         let isSedangDihukum = false; 
 
-        // --- 3. FITUR PANTAU LIVE & HUKUMAN ---
+        // --- 3. AUTO-FULLSCREEN (HIDING ANDROID NAVIGATION Workaround) ---
+        function aktifkanLayarPenuh() {
+            const docEl = document.documentElement;
+            if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
+            else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {});
+            else if (docEl.msRequestFullscreen) docEl.msRequestFullscreen().catch(() => {});
+        }
+
+        // Browser memblokir fullscreen otomatis tanpa sentuhan, jadi kita picu saat siswa mengetuk layar pertama kali
+        document.body.addEventListener('click', () => {
+            aktifkanLayarPenuh();
+        }, { once: false });
+
+        // --- 4. FITUR PANTAU LIVE & HUKUMAN ---
         async function laporHadirKeGuru() {
+            if (idPantauLive) return; // Jika sudah ada di memori refresh, tidak perlu duplikat baris di guru
             try {
                 const { data, error } = await supabaseClient
                     .from('pantau_live')
@@ -150,17 +160,21 @@
                         nama_siswa: namaSiswa,
                         kelas: kelasSiswa,
                         status: 'Sedang Mengerjakan',
-                        jumlah_pelanggaran: 0
+                        jumlah_pelanggaran: jumlahPelanggaran
                     }])
                     .select()
                     .single();
-                if (data) idPantauLive = data.id;
+                if (data) {
+                    idPantauLive = data.id;
+                    sessionStorage.setItem('cbt_id_pantau', data.id);
+                }
             } catch (err) { console.log("Gagal menyalakan radar"); }
         }
 
         document.addEventListener("visibilitychange", async () => {
             if (document.visibilityState === 'hidden' && !isSedangDihukum) {
                 jumlahPelanggaran++;
+                sessionStorage.setItem('cbt_pelanggaran', jumlahPelanggaran); // Kunci data pelanggaran di memori
                 
                 if (idPantauLive) {
                     supabaseClient.from('pantau_live')
@@ -169,7 +183,6 @@
                 }
 
                 if (jumlahPelanggaran >= 4) {
-                    // Paksa kumpul karena pelanggaran batas maksimal
                     selesaiUjian(true); 
                 } else {
                     terapkanHukuman(jumlahPelanggaran);
@@ -188,11 +201,11 @@
             if (tingkat === 1) {
                 waktuTunggu = 60; 
                 judul.style.color = "#f97316"; judul.innerText = "⚠️ PERINGATAN 1 ⚠️";
-                teks.innerHTML = "Anda terdeteksi keluar dari layar ujian.<br>Silakan tunggu 1 menit untuk melanjutkan.";
+                teks.innerHTML = "Anda terdeteksi keluar dari layar ujian atau membuka sistem Android.<br>Silakan tunggu 1 menit untuk melanjutkan.";
             } else if (tingkat === 2) {
                 waktuTunggu = 120; 
                 judul.style.color = "#eab308"; judul.innerText = "🟨 KARTU KUNING (Peringatan 2) 🟨";
-                teks.innerHTML = "Anda kembali melakukan pelanggaran pindah layar.<br>Hukuman waktu tunggu dilipatgandakan menjadi 2 menit!";
+                teks.innerHTML = "Anda kembali melakukan pelanggaran pindah layar.<br>Hukuman waktu tunggu dilipatgandakan menjadi 2 minutes!";
             } else if (tingkat === 3) {
                 waktuTunggu = 300; 
                 judul.style.color = "#ef4444"; judul.innerText = "🟥 KARTU MERAH (Peringatan 3) 🟥";
@@ -220,7 +233,7 @@
             }
         }
 
-        // --- 4. LOGIKA CBT (MESIN UJIAN) ---
+        // --- 5. LOGIKA CBT (MENGUNCI STRUKTUR SOAL AGAR TIDAK BERUBAH SAAT REFRESH) ---
         function acakArray(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -236,16 +249,24 @@
             laporHadirKeGuru();
 
             try {
-                const { data, error } = await supabaseClient
-                    .from('soal')
-                    .select('*')
-                    .eq('ujian_id', idUjianSiswa)
-                    .order('created_at', { ascending: true }); 
+                // Periksa apakah urutan soal sudah tersimpan di memori jangka pendek akibat refresh
+                if (sessionStorage.getItem('cbt_daftar_soal')) {
+                    daftarSoal = JSON.parse(sessionStorage.getItem('cbt_daftar_soal'));
+                } else {
+                    // Jika benar-benar baru masuk, tarik dari database
+                    const { data, error } = await supabaseClient
+                        .from('soal')
+                        .select('*')
+                        .eq('ujian_id', idUjianSiswa)
+                        .order('created_at', { ascending: true }); 
 
-                if (error) throw error;
-                if (data.length === 0) throw new Error("Belum ada soal pada ujian ini.");
+                    if (error) throw error;
+                    if (data.length === 0) throw new Error("Belum ada soal pada ujian ini.");
 
-                daftarSoal = isUjianDiacak ? acakArray([...data]) : data;
+                    daftarSoal = isUjianDiacak ? acakArray([...data]) : data;
+                    // Kunci urutan soal ini di memori agar jika di-refresh urutannya tidak teracak ulang
+                    sessionStorage.setItem('cbt_daftar_soal', JSON.stringify(daftarSoal));
+                }
                 
                 document.getElementById('loadingScreen').style.display = 'none';
                 document.getElementById('headerUjian').style.display = 'flex';
@@ -254,6 +275,11 @@
 
                 renderSoal(); 
                 mulaiTimer(); 
+
+                // Jika siswa me-refresh saat sedang dihukum, tampilkan lagi layarnya
+                if (jumlahPelanggaran > 0 && jumlahPelanggaran < 4) {
+                    terapkanHukuman(jumlahPelanggaran);
+                }
 
             } catch (err) {
                 document.getElementById('loadingScreen').innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
@@ -284,7 +310,16 @@
                 { id_asli: 'D', teks: soalAktif.opsi_d }
             ];
 
-            if (isUjianDiacak) opsiArray = acakArray(opsiArray);
+            // Mengunci urutan opsi per soal agar tidak berubah saat refresh
+            const kunciMemoriOpsi = `cbt_opsi_${soalAktif.id}`;
+            if (isUjianDiacak) {
+                if (sessionStorage.getItem(kunciMemoriOpsi)) {
+                    opsiArray = JSON.parse(sessionStorage.getItem(kunciMemoriOpsi));
+                } else {
+                    opsiArray = acakArray(opsiArray);
+                    sessionStorage.setItem(kunciMemoriOpsi, JSON.stringify(opsiArray));
+                }
+            }
 
             const labelVisual = ['A', 'B', 'C', 'D'];
             
@@ -309,6 +344,7 @@
 
         window.simpanJawaban = function(idSoal, jawaban) {
             jawabanSiswa[idSoal] = jawaban;
+            sessionStorage.setItem('cbt_jawaban', JSON.stringify(jawabanSiswa)); // Amankan jawaban
             renderSoal(); 
         }
 
@@ -316,12 +352,12 @@
             indexSoalAktif += arah;
             if (indexSoalAktif < 0) indexSoalAktif = 0;
             if (indexSoalAktif >= daftarSoal.length) indexSoalAktif = daftarSoal.length - 1;
+            sessionStorage.setItem('cbt_index_aktif', indexSoalAktif); // Amankan nomor nomor soal terakhir
             renderSoal();
         }
 
         function aturTombolNavigasi() {
             document.getElementById('btnPrev').disabled = indexSoalAktif === 0;
-            
             if (indexSoalAktif === daftarSoal.length - 1) {
                 document.getElementById('btnNext').style.display = 'none';
                 document.getElementById('btnFinish').style.display = 'block';
@@ -331,21 +367,25 @@
             }
         }
 
-        // --- 5. TIMER & PENGUMPULAN ---
+        // --- 6. TIMER & PENGUMPULAN ---
         function mulaiTimer() {
             const timerEl = document.getElementById('timerDisplay');
+            if(timerInterval) clearInterval(timerInterval);
+            
             timerInterval = setInterval(() => {
                 sisaWaktuDetik--;
+                sessionStorage.setItem('cbt_sisa_waktu', sisaWaktuDetik); // Amankan sisa waktu detikan
                 
+                if (sisaWaktuDetik <= 0) {
+                    clearInterval(timerInterval);
+                    selfinishedUjian(true); 
+                    return;
+                }
+
                 const jam = String(Math.floor(sisaWaktuDetik / 3600)).padStart(2, '0');
                 const menit = String(Math.floor((sisaWaktuDetik % 3600) / 60)).padStart(2, '0');
                 const detik = String(sisaWaktuDetik % 60).padStart(2, '0');
                 timerEl.innerText = `${jam}:${menit}:${detik}`;
-
-                if (sisaWaktuDetik <= 0) {
-                    clearInterval(timerInterval);
-                    selesaiUjian(true); // Paksa kumpul karena waktu habis
-                }
             }, 1000);
         }
 
@@ -376,7 +416,6 @@
             nilaiAkhir = Math.round(nilaiAkhir);
 
             try {
-                // Simpan nilai ke tabel 'nilai'
                 await supabaseClient.from('nilai').insert([{
                     ujian_id: idUjianSiswa,
                     nama_siswa: namaSiswa,
@@ -385,12 +424,11 @@
                     nilai: nilaiAkhir
                 }]);
 
-                // Ubah status di radar Guru
                 await laporkanSelesaiKeGuru();
 
-                alert(`✅ UJIAN SELESAI ✅\nNilai Anda telah tersimpan ke sistem.\nSilakan keluar dari aplikasi.`);
+                alert(`✅ UJIAN SELESAI ✅\nNilai Anda telah tersimpan ke sistem.`);
                 
-                // Bersihkan Sesi agar tidak bisa masuk lagi
+                // Hapus memori pengerjaan agar bersih total setelah selesai
                 sessionStorage.clear();
                 window.location.href = 'login-siswa.html';
 
@@ -400,7 +438,6 @@
             }
         }
 
-        // Jalankan aplikasi saat file dibuka
         window.onload = mulaiSistem;
     </script>
 </body>

@@ -127,7 +127,7 @@
                 // Cari ujian berdasarkan token
                 const { data, error } = await supabaseClient
                     .from('ujian')
-                    .select('id, nama_ujian, durasi, is_active, acak')
+                    .select('id, nama_ujian, durasi, is_active, acak_soal')
                     .eq('token', token)
                     .single();
 

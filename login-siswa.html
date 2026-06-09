@@ -127,7 +127,7 @@
                 // Cari ujian berdasarkan token
                 const { data, error } = await supabaseClient
                     .from('ujian')
-                    .select('id, nama_ujian, durasi, is_active')
+                    .select('id, nama_ujian, durasi, is_active, acak')
                     .eq('token', token)
                     .single();
 
@@ -145,6 +145,7 @@
                 sessionStorage.setItem('ujian_id', data.id);
                 sessionStorage.setItem('ujian_nama', data.nama_ujian);
                 sessionStorage.setItem('ujian_durasi', data.durasi);
+                sessionStorage.setItem('ujian_acak', data.acak_soal);
 
                 alert(`Selamat datang, ${nama} (Kelas ${kelas})!\nAnda akan mengerjakan: ${data.nama_ujian}`);
                 window.location.href = 'ruang-ujian.html';

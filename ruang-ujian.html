@@ -84,7 +84,12 @@
 
     <div class="container">
         <div id="loadingScreen">Menyiapkan Lembar Soal...</div>
-        
+        <div id="layarHukuman" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); color: white; z-index: 99999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; font-family: sans-serif;">
+        <h1 id="judulHukuman" style="color: #ef4444; font-size: 2.5rem; margin-bottom: 10px;">🚨 PELANGGARAN! 🚨</h1>
+        <p id="teksHukuman" style="font-size: 1.2rem; margin-bottom: 30px; line-height: 1.5;">Anda terdeteksi keluar dari layar ujian.</p>
+        <div style="font-size: 5rem; font-weight: bold; color: #f59e0b; margin-bottom: 20px;" id="countdownHukuman">60</div>
+        <p style="color: #9ca3af; font-size: 1rem;">Layar terkunci. Tunggu hingga waktu habis untuk melanjutkan ujian.</p>
+    </div>
         <div class="card-soal" id="ruangSoal" style="display: none;">
             <div class="nomor-soal" id="nomorSoalDisplay">Soal No. 1</div>
             <img id="gambarSoalDisplay" class="gambar-soal" src="" alt="Gambar Pendukung">
@@ -128,220 +133,16 @@
         let jawabanSiswa = {}; // Format: { id_soal: 'A', id_soal2: 'C' }
         let sisaWaktuDetik = durasiMenit * 60;
         let timerInterval;
-        let idPantauLive = null;
+let idPantauLive = null;
         let jumlahPelanggaran = 0;
+        let isSedangDihukum = false; // Mencegah waktu bertumpuk
 
-        // Tampilkan info di Header
-        document.getElementById('tampilNamaSiswa').innerText = namaSiswa;
-        document.getElementById('tampilNamaUjian').innerText = namaUjian;
-
-  // Fungsi Algoritma Pengacak (Fisher-Yates)
-        function acakArray(array) {
-            for (let i = array.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[j]] = [array[j], array[i]];
-            }
-            return array;
-        }
-
-        // 1. Fungsi Mengambil Soal
-        async function mulaiSistem() {
-            try {
-                const { data, error } = await supabaseClient
-                    .from('soal')
-                    .select('*')
-                    .eq('ujian_id', idUjianSiswa)
-                    .order('created_at', { ascending: true }); 
-
-                if (error) throw error;
-                if (data.length === 0) throw new Error("Belum ada soal pada ujian ini.");
-
-                // JIKA MODE ACAK AKTIF, ACAK URUTAN SOALNYA
-                daftarSoal = isUjianDiacak ? acakArray([...data]) : data;
-                
-                document.getElementById('loadingScreen').style.display = 'none';
-                document.getElementById('headerUjian').style.display = 'flex';
-                document.getElementById('ruangSoal').style.display = 'block';
-                document.getElementById('navigasiUjian').style.display = 'flex';
-
-                renderSoal(); 
-                mulaiTimer(); 
-
-            } catch (err) {
-                document.getElementById('loadingScreen').innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
-            }
-        }
-
-        // 2. Fungsi Menampilkan Soal ke Layar
-        function renderSoal() {
-            const soalAktif = daftarSoal[indexSoalAktif];
-            
-            document.getElementById('nomorSoalDisplay').innerText = `Soal No. ${indexSoalAktif + 1} dari ${daftarSoal.length}`;
-            document.getElementById('teksSoalDisplay').innerText = soalAktif.pertanyaan;
-
-            const imgEl = document.getElementById('gambarSoalDisplay');
-            if (soalAktif.gambar_url) {
-                imgEl.src = soalAktif.gambar_url;
-                imgEl.style.display = 'block';
-            } else {
-                imgEl.style.display = 'none';
-            }
-
-            const container = document.getElementById('opsiContainer');
-            container.innerHTML = ''; 
-
-            // Siapkan opsi asli beserta ID huruf aslinya untuk dikirim ke kunci jawaban
-            let opsiArray = [
-                { id_asli: 'A', teks: soalAktif.opsi_a },
-                { id_asli: 'B', teks: soalAktif.opsi_b },
-                { id_asli: 'C', teks: soalAktif.opsi_c },
-                { id_asli: 'D', teks: soalAktif.opsi_d }
-            ];
-
-            // JIKA MODE ACAK AKTIF, ACAK POSISI JAWABANNYA
-            if (isUjianDiacak) {
-                opsiArray = acakArray(opsiArray);
-            }
-
-            // Render ke layar dengan label A, B, C, D yang selalu urut secara visual
-            const labelVisual = ['A', 'B', 'C', 'D'];
-            
-            opsiArray.forEach((opsi, index) => {
-                const hurufTampil = labelVisual[index]; // Visual selalu A, B, C, D
-                const hurufData = opsi.id_asli; // Data yang dikirim tetap aslinya (misal opsi C)
-
-                const divItem = document.createElement('label');
-                divItem.className = 'opsi-item';
-                
-                // Cek apakah siswa sudah menjawab opsi ini sebelumnya
-                if (jawabanSiswa[soalAktif.id] === hurufData) {
-                    divItem.classList.add('terpilih');
-                }
-
-                divItem.innerHTML = `
-                    <span class="opsi-huruf">${hurufTampil}</span>
-                    <span class="opsi-teks">${opsi.teks}</span>
-                    <input type="radio" name="jawaban" value="${hurufData}" onchange="simpanJawaban('${soalAktif.id}', '${hurufData}')" ${jawabanSiswa[soalAktif.id] === hurufData ? 'checked' : ''}>
-                `;
-                container.appendChild(divItem);
-            });
-
-            aturTombolNavigasi();
-        }
-
-        // 3. Fungsi Menyimpan Pilihan Siswa ke Memori Sementara
-        window.simpanJawaban = function(idSoal, hurufDipilih) {
-            jawabanSiswa[idSoal] = hurufDipilih;
-            renderSoal(); // Render ulang agar opsi yang dipilih berubah warna menjadi biru
-        }
-
-        // 4. Fungsi Navigasi (Maju/Mundur)
-        window.gantiSoal = function(arah) {
-            indexSoalAktif += arah;
-            renderSoal();
-            window.scrollTo(0, 0); // Scroll ke atas tiap ganti soal
-        }
-
-        function aturTombolNavigasi() {
-            document.getElementById('btnPrev').disabled = (indexSoalAktif === 0);
-            
-            // Jika ini soal terakhir, sembunyikan tombol Next, munculkan tombol Kumpulkan
-            if (indexSoalAktif === daftarSoal.length - 1) {
-                document.getElementById('btnNext').style.display = 'none';
-                document.getElementById('btnFinish').style.display = 'block';
-            } else {
-                document.getElementById('btnNext').style.display = 'block';
-                document.getElementById('btnFinish').style.display = 'none';
-            }
-        }
-
-        // 5. Timer Mundur
-        function mulaiTimer() {
-            timerInterval = setInterval(() => {
-                if (sisaWaktuDetik <= 0) {
-                    clearInterval(timerInterval);
-                    alert("Waktu Habis! Jawaban Anda akan dikumpulkan otomatis.");
-                    prosesPenilaian();
-                    return;
-                }
-                sisaWaktuDetik--;
-                
-                const jam = Math.floor(sisaWaktuDetik / 3600);
-                const menit = Math.floor((sisaWaktuDetik % 3600) / 60);
-                const detik = sisaWaktuDetik % 60;
-                
-                document.getElementById('timerDisplay').innerText = 
-                    `${String(jam).padStart(2, '0')}:${String(menit).padStart(2, '0')}:${String(detik).padStart(2, '0')}`;
-            }, 1000);
-        }
-
-        // 6. Tombol Kumpulkan Jawaban Manual
-        window.selesaiUjian = function() {
-            const jumlahDijawab = Object.keys(jawabanSiswa).length;
-            if (jumlahDijawab < daftarSoal.length) {
-                if (!confirm(`Ada ${daftarSoal.length - jumlahDijawab} soal yang belum dijawab. Yakin ingin mengumpulkan sekarang?`)) {
-                    return; // Batal mengumpulkan
-                }
-            } else {
-                if (!confirm("Apakah Anda yakin sudah selesai dan ingin mengumpulkan jawaban?")) return;
-            }
-            prosesPenilaian();
-        }
-
-// 7. Hitung dan Simpan Nilai Akhir ke Database
-        async function prosesPenilaian() {
-            clearInterval(timerInterval);
-            document.getElementById('navigasiUjian').style.display = 'none';
-            
-            // Ubah tampilan menjadi proses menyimpan
-            document.getElementById('ruangSoal').innerHTML = '<div style="text-align:center; padding: 3rem;"><h2>Sedang Menyimpan Nilai... ⏳</h2><p>Mohon jangan tutup aplikasi ini.</p></div>';
-
-            let jumlahBenar = 0;
-            
-            // Cek satu per satu jawaban siswa vs kunci jawaban dari database
-            daftarSoal.forEach(soal => {
-                if (jawabanSiswa[soal.id] === soal.kunci_jawaban) {
-                    jumlahBenar++;
-                }
-            });
-
-            // Rumus Nilai: (Benar / Total Soal) x 100
-            const nilaiAkhir = Math.round((jumlahBenar / daftarSoal.length) * 100);
-
-            try {
-                // KIRIM DATA KE TABEL 'nilai' DI SUPABASE
-                const { error } = await supabaseClient
-                    .from('nilai')
-                    .insert([
-                        { 
-                            ujian_id: parseInt(idUjianSiswa), 
-                            nama_siswa: namaSiswa,
-                            kelas: kelasSiswa, // Baris Baru
-                            jumlah_benar: jumlahBenar,
-                            nilai_akhir: nilaiAkhir
-                        }
-                    ]);
-
-                if (error) throw error;
-
-                // Tampilkan hasil jika berhasil disimpan
-                alert(`UJIAN SELESAI!\n\nNama: ${namaSiswa}\nBenar: ${jumlahBenar} dari ${daftarSoal.length} soal\n\nNILAI ANDA: ${nilaiAkhir}\n\n(Nilai Anda telah berhasil dikirim ke Guru)`);
-
-            } catch (error) {
-                alert("Peringatan: Gagal menyimpan nilai ke database! Error: " + error.message);
-                console.error(error);
-            } finally {
-                // Hapus sesi agar siswa tidak bisa menekan tombol "Back" dan mengerjakan ulang
-                sessionStorage.clear();
-                window.location.href = 'login-siswa.html';
-            }
-        }
-// 1. Melaporkan Kehadiran Siswa ke Layar Guru
+        // 1. Melaporkan Kehadiran (Dengan pencarian nama yang lebih kuat)
         async function laporHadirKeGuru() {
             try {
-                // Ambil nama dan kelas dari sessionStorage (saat siswa login)
-                const nama = sessionStorage.getItem('nama_siswa') || 'Siswa Tanpa Nama';
-                const kelas = sessionStorage.getItem('kelas_siswa') || '-';
+                // Mencari nama dari berbagai kemungkinan penyimpanan login
+                const nama = sessionStorage.getItem('nama') || sessionStorage.getItem('nama_siswa') || sessionStorage.getItem('namaSiswa') || 'Siswa Tanpa Nama';
+                const kelas = sessionStorage.getItem('kelas') || sessionStorage.getItem('kelas_siswa') || sessionStorage.getItem('kelasSiswa') || '-';
 
                 const { data, error } = await supabaseClient
                     .from('pantau_live')
@@ -355,40 +156,87 @@
                     .select()
                     .single();
 
-                if (data) {
-                    idPantauLive = data.id; // Simpan ID untuk diupdate jika siswa curang
-                }
-            } catch (err) {
-                console.log("Gagal menyalakan radar:", err);
-            }
+                if (data) idPantauLive = data.id;
+            } catch (err) { console.log("Gagal menyalakan radar:", err); }
         }
 
-        // 2. Sensor Pindah Layar (Anti-Nyontek)
+        // 2. Sensor Cerdas Pindah Layar (Anti-Nyontek)
         document.addEventListener("visibilitychange", async () => {
-            // Jika layar disembunyikan (buka tab lain, tekan tombol home, atau buka aplikasi lain)
-            if (document.visibilityState === 'hidden') {
+            // Hanya aktif jika siswa keluar layar DAN sedang tidak dalam masa hukuman
+            if (document.visibilityState === 'hidden' && !isSedangDihukum) {
                 jumlahPelanggaran++;
                 
-                // Beri peringatan mengejutkan di layar HP siswa
-                alert(`🚨 PERINGATAN KECURANGAN! 🚨\n\nAnda terdeteksi keluar dari layar ujian!\nIni adalah pelanggaran ke-${jumlahPelanggaran}.\n\nJika mencapai 3 kali, ujian akan dihentikan paksa dan nilai dikosongkan!`);
-
-                // Laporkan diam-diam ke database guru
+                // Diam-diam lapor ke Dashboard Guru
                 if (idPantauLive) {
-                    await supabaseClient
-                        .from('pantau_live')
-                        .update({ 
-                            jumlah_pelanggaran: jumlahPelanggaran,
-                            terakhir_aktif: new Date()
-                        })
-                        .eq('id', idPantauLive);
+                    supabaseClient.from('pantau_live')
+                        .update({ jumlah_pelanggaran: jumlahPelanggaran, terakhir_aktif: new Date() })
+                        .eq('id', idPantauLive).then();
                 }
 
-                // Eksekusi Hukuman jika bandel
-                if (jumlahPelanggaran >= 3) {
-                    alert("❌ BATAS PELANGGARAN TERCAPAI! ❌\nUjian Anda dihentikan secara paksa.");
-                    // Ganti 'kumpulkanUjian' dengan nama fungsi submit/selesai milik Bapak jika berbeda
-                    kumpulkanUjian(); 
-                    laporkanSelesaiKeGuru();
+                // Eksekusi Hukuman Sesuai Tingkatan
+                if (jumlahPelanggaran >= 4) {
+                    alert("❌ PELANGGARAN KE-4 ❌\nBatas maksimal terlampaui. Anda dikeluarkan dari ujian secara otomatis!");
+                    kumpulkanUjian(); // Memicu fungsi selesai ujian
+                } else {
+                    terapkanHukuman(jumlahPelanggaran);
+                }
+            }
+        });
+
+        // 3. Mesin Layar Hukuman (1 Menit, 2 Menit, 5 Menit)
+        function terapkanHukuman(tingkat) {
+            isSedangDihukum = true; // Mengunci sensor sementara
+            const layar = document.getElementById('layarHukuman');
+            const judul = document.getElementById('judulHukuman');
+            const teks = document.getElementById('teksHukuman');
+            const timerEl = document.getElementById('countdownHukuman');
+            
+            let waktuTunggu = 0;
+            
+            if (tingkat === 1) {
+                waktuTunggu = 60; // 1 Menit
+                judul.style.color = "#f97316"; 
+                judul.innerText = "⚠️ PERINGATAN 1 ⚠️";
+                teks.innerHTML = "Anda terdeteksi keluar dari layar ujian.<br>Silakan tunggu 1 menit untuk melanjutkan.";
+            } else if (tingkat === 2) {
+                waktuTunggu = 120; // 2 Menit
+                judul.style.color = "#eab308"; 
+                judul.innerText = "🟨 KARTU KUNING (Peringatan 2) 🟨";
+                teks.innerHTML = "Anda kembali melakukan pelanggaran pindah layar.<br>Hukuman waktu tunggu dilipatgandakan menjadi 2 menit!";
+            } else if (tingkat === 3) {
+                waktuTunggu = 300; // 5 Menit
+                judul.style.color = "#ef4444"; 
+                judul.innerText = "🟥 KARTU MERAH (Peringatan 3) 🟥";
+                teks.innerHTML = "Ini adalah peringatan TERAKHIR!<br>Jika keluar layar 1x lagi, Anda akan dikeluarkan dari ujian.<br>Tunggu 5 menit untuk melanjutkan.";
+            }
+
+            layar.style.display = 'flex'; // Tampilkan layar hitam pemblokir
+            
+            let sisaWaktu = waktuTunggu;
+            timerEl.innerText = sisaWaktu;
+
+            // Jalankan Hitung Mundur
+            const hitungMundur = setInterval(() => {
+                sisaWaktu--;
+                timerEl.innerText = sisaWaktu;
+                
+                // Jika waktu habis
+                if (sisaWaktu <= 0) {
+                    clearInterval(hitungMundur);
+                    layar.style.display = 'none'; // Sembunyikan layar blokir
+                    isSedangDihukum = false; // Buka kunci sensor
+                }
+            }, 1000);
+        }
+
+        // 4. Update status selesai
+        async function laporkanSelesaiKeGuru() {
+            if (idPantauLive) {
+                await supabaseClient.from('pantau_live').update({ status: 'Selesai' }).eq('id', idPantauLive);
+            }
+        }
+        
+        window.addEventListener('DOMContentLoaded', () => { laporHadirKeGuru(); });
                 }
             }
         });

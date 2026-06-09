@@ -1,4 +1,57 @@
-<script>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buat Ujian Baru</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; margin: 0; }
+        header { background-color: #2563eb; color: white; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+        header a { color: white; text-decoration: none; font-weight: bold; font-size: 1.1rem; }
+        header h1 { margin: 0; font-size: 1.5rem; }
+        .container { background: white; max-width: 500px; margin: 3rem auto; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #1f2937; margin-bottom: 2rem; font-size: 1.5rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; color: #374151; font-weight: 600; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 0.8rem; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        .checkbox-group { display: flex; align-items: center; gap: 0.8rem; background-color: #eff6ff; padding: 1.2rem; border-radius: 8px; border: 1px solid #bfdbfe; margin-top: 1rem; margin-bottom: 2rem; }
+        .checkbox-group input { width: 20px; height: 20px; cursor: pointer; }
+        .checkbox-group label { margin: 0; font-weight: normal; color: #1e3a8a; cursor: pointer; font-weight: 500; }
+        button { width: 100%; background-color: #2563eb; color: white; border: none; padding: 1rem; border-radius: 6px; font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: 0.2s; }
+        button:hover { background-color: #1d4ed8; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="dashboard-guru.html">&larr; Kembali</a>
+        <h1>Buat Ujian Baru</h1>
+        <span>Guru</span>
+    </header>
+
+    <div class="container">
+        <h2>Detail Ujian</h2>
+        <form id="formUjian">
+            <div class="form-group">
+                <label>Nama Ujian / Mata Pelajaran</label>
+                <input type="text" placeholder="Contoh: UTS Matematika 9A" required>
+            </div>
+            <div class="form-group">
+                <label>Durasi Pengerjaan (Menit)</label>
+                <input type="number" placeholder="Contoh: 90" required>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="acakSoal">
+                <label for="acakSoal">Acak Urutan Soal & Pilihan Jawaban</label>
+            </div>
+            
+            <button type="submit">Buat Ujian</button>
+        </form>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
         const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
         const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -13,47 +66,42 @@
         cekLogin();
 
         // Fungsi saat tombol "Buat Ujian" diklik
-        document.querySelector('form').addEventListener('submit', async function(e) {
-            e.preventDefault(); // Mencegah halaman me-refresh
+        document.getElementById('formUjian').addEventListener('submit', async function(e) {
+            e.preventDefault(); 
 
-            // 1. Tangkap semua isian dari kotak formulir
             const namaUjian = document.querySelector('input[type="text"]').value.trim();
             const durasi = document.querySelector('input[type="number"]').value.trim();
-            const isAcak = document.getElementById('acakSoal').checked; // Tangkap status centang
+            const isAcak = document.getElementById('acakSoal').checked; 
 
-            // 2. Ubah tampilan tombol menjadi proses
             const btnSubmit = document.querySelector('button[type="submit"]');
             const teksAsli = btnSubmit.innerText;
             btnSubmit.innerText = "Menyimpan Ujian... ⏳";
             btnSubmit.disabled = true;
 
             try {
-                // 3. Kirim data ke Supabase (Tabel: ujian)
                 const { error } = await supabaseClient
                     .from('ujian')
                     .insert([
                         { 
                             nama_ujian: namaUjian, 
                             durasi: parseInt(durasi),
-                            acak_soal: isAcak // Kirim status acak ke database
+                            acak_soal: isAcak 
                         }
                     ]);
 
-                // Jika ada penolakan dari database (misal kolom belum dibuat)
                 if (error) throw error;
 
-                // 4. Jika sukses, kembalikan ke Dashboard
                 alert("Ujian berhasil dibuat!");
                 window.location.href = 'dashboard-guru.html';
 
             } catch (error) {
-                // 5. Jika gagal, munculkan pesan error agar kita tahu penyebabnya
                 alert("Gagal menyimpan ke database! Error: " + error.message);
                 console.error(error);
                 
-                // Kembalikan tombol seperti semula
                 btnSubmit.innerText = teksAsli;
                 btnSubmit.disabled = false;
             }
         });
     </script>
+</body>
+</html>

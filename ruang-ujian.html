@@ -128,6 +128,8 @@
         let jawabanSiswa = {}; // Format: { id_soal: 'A', id_soal2: 'C' }
         let sisaWaktuDetik = durasiMenit * 60;
         let timerInterval;
+        let idPantauLive = null;
+        let jumlahPelanggaran = 0;
 
         // Tampilkan info di Header
         document.getElementById('tampilNamaSiswa').innerText = namaSiswa;
@@ -334,6 +336,77 @@
                 window.location.href = 'login-siswa.html';
             }
         }
+// 1. Melaporkan Kehadiran Siswa ke Layar Guru
+        async function laporHadirKeGuru() {
+            try {
+                // Ambil nama dan kelas dari sessionStorage (saat siswa login)
+                const nama = sessionStorage.getItem('nama_siswa') || 'Siswa Tanpa Nama';
+                const kelas = sessionStorage.getItem('kelas_siswa') || '-';
+
+                const { data, error } = await supabaseClient
+                    .from('pantau_live')
+                    .insert([{
+                        ujian_id: idUjianSiswa,
+                        nama_siswa: nama,
+                        kelas: kelas,
+                        status: 'Sedang Mengerjakan',
+                        jumlah_pelanggaran: 0
+                    }])
+                    .select()
+                    .single();
+
+                if (data) {
+                    idPantauLive = data.id; // Simpan ID untuk diupdate jika siswa curang
+                }
+            } catch (err) {
+                console.log("Gagal menyalakan radar:", err);
+            }
+        }
+
+        // 2. Sensor Pindah Layar (Anti-Nyontek)
+        document.addEventListener("visibilitychange", async () => {
+            // Jika layar disembunyikan (buka tab lain, tekan tombol home, atau buka aplikasi lain)
+            if (document.visibilityState === 'hidden') {
+                jumlahPelanggaran++;
+                
+                // Beri peringatan mengejutkan di layar HP siswa
+                alert(`🚨 PERINGATAN KECURANGAN! 🚨\n\nAnda terdeteksi keluar dari layar ujian!\nIni adalah pelanggaran ke-${jumlahPelanggaran}.\n\nJika mencapai 3 kali, ujian akan dihentikan paksa dan nilai dikosongkan!`);
+
+                // Laporkan diam-diam ke database guru
+                if (idPantauLive) {
+                    await supabaseClient
+                        .from('pantau_live')
+                        .update({ 
+                            jumlah_pelanggaran: jumlahPelanggaran,
+                            terakhir_aktif: new Date()
+                        })
+                        .eq('id', idPantauLive);
+                }
+
+                // Eksekusi Hukuman jika bandel
+                if (jumlahPelanggaran >= 3) {
+                    alert("❌ BATAS PELANGGARAN TERCAPAI! ❌\nUjian Anda dihentikan secara paksa.");
+                    // Ganti 'kumpulkanUjian' dengan nama fungsi submit/selesai milik Bapak jika berbeda
+                    kumpulkanUjian(); 
+                    laporkanSelesaiKeGuru();
+                }
+            }
+        });
+
+        // 3. Update status menjadi selesai saat kumpul
+        async function laporkanSelesaiKeGuru() {
+            if (idPantauLive) {
+                await supabaseClient
+                    .from('pantau_live')
+                    .update({ status: 'Selesai' })
+                    .eq('id', idPantauLive);
+            }
+        }
+
+        // Jalankan pelapor kehadiran saat halaman pertama kali dimuat
+        window.addEventListener('DOMContentLoaded', () => {
+            laporHadirKeGuru();
+        });
 
         // Jalankan aplikasi saat file dibuka
         window.onload = mulaiSistem;

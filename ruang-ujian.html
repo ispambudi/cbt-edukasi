@@ -53,7 +53,7 @@
         .opsi-item.terpilih { border-color: var(--primary-color); background-color: #eff6ff; }
         
         .opsi-huruf { font-weight: bold; margin-right: 1rem; color: var(--primary-color); }
-        input[type="radio"] { display: none; } /* Sembunyikan radio button asli */
+        input[type="radio"] { display: none; } 
 
         /* Navigasi Bawah */
         .nav-bawah {
@@ -82,14 +82,16 @@
         <div class="timer-box" id="timerDisplay">00:00:00</div>
     </header>
 
-    <div class="container">
-        <div id="loadingScreen">Menyiapkan Lembar Soal...</div>
-        <div id="layarHukuman" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); color: white; z-index: 99999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; font-family: sans-serif;">
+    <div id="layarHukuman" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); color: white; z-index: 99999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; font-family: sans-serif;">
         <h1 id="judulHukuman" style="color: #ef4444; font-size: 2.5rem; margin-bottom: 10px;">🚨 PELANGGARAN! 🚨</h1>
         <p id="teksHukuman" style="font-size: 1.2rem; margin-bottom: 30px; line-height: 1.5;">Anda terdeteksi keluar dari layar ujian.</p>
         <div style="font-size: 5rem; font-weight: bold; color: #f59e0b; margin-bottom: 20px;" id="countdownHukuman">60</div>
         <p style="color: #9ca3af; font-size: 1rem;">Layar terkunci. Tunggu hingga waktu habis untuk melanjutkan ujian.</p>
     </div>
+
+    <div class="container">
+        <div id="loadingScreen">Menyiapkan Lembar Soal...</div>
+        
         <div class="card-soal" id="ruangSoal" style="display: none;">
             <div class="nomor-soal" id="nomorSoalDisplay">Soal No. 1</div>
             <img id="gambarSoalDisplay" class="gambar-soal" src="" alt="Gambar Pendukung">
@@ -103,158 +105,300 @@
     <div class="nav-bawah" id="navigasiUjian" style="display: none;">
         <button class="btn-prev" id="btnPrev" onclick="gantiSoal(-1)">← Sebelumnya</button>
         <button class="btn-next" id="btnNext" onclick="gantiSoal(1)">Selanjutnya →</button>
-        <button class="btn-finish" id="btnFinish" onclick="selesaiUjian()">Kumpulkan Jawaban</button>
+        <button class="btn-finish" id="btnFinish" onclick="selesaiUjian(false)">Kumpulkan Jawaban</button>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <script>
+        // --- 1. INISIALISASI SUPABASE & DATA SESI ---
         const SUPABASE_URL = 'https://qxeudzvfikxvkrlggaql.supabase.co'; 
         const SUPABASE_ANON_KEY = 'sb_publishable_VRbLLS9RA2TNY2QsGvs7IA_S6mCtlA-'; 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Mengambil data dari sessionStorage (yang disimpan saat login)
         const idUjianSiswa = sessionStorage.getItem('ujian_id');
-        const namaSiswa = sessionStorage.getItem('siswa_nama');
-        const kelasSiswa = sessionStorage.getItem('siswa_kelas'); // Baris Baru
+        const namaSiswa = sessionStorage.getItem('siswa_nama') || sessionStorage.getItem('nama_siswa') || sessionStorage.getItem('nama') || 'Siswa Tanpa Nama';
+        const kelasSiswa = sessionStorage.getItem('siswa_kelas') || sessionStorage.getItem('kelas_siswa') || sessionStorage.getItem('kelas') || '-';
         const namaUjian = sessionStorage.getItem('ujian_nama');
         const durasiMenit = parseInt(sessionStorage.getItem('ujian_durasi'));
         const isUjianDiacak = sessionStorage.getItem('ujian_acak') === 'true';
 
-        // Keamanan: Tendang kembali ke login jika masuk tanpa izin
-        if (!idUjianSiswa || !namaSiswa) {
+        if (!idUjianSiswa) {
             alert("Sesi tidak valid! Silakan login terlebih dahulu.");
             window.location.href = 'login-siswa.html';
         }
 
-        // Variabel global untuk menyimpan state ujian
+        // --- 2. VARIABEL GLOBAL UJIAN ---
         let daftarSoal = [];
         let indexSoalAktif = 0;
-        let jawabanSiswa = {}; // Format: { id_soal: 'A', id_soal2: 'C' }
-        let sisaWaktuDetik = durasiMenit * 60;
+        let jawabanSiswa = {}; 
+        let sisaWaktuDetik = (durasiMenit && !isNaN(durasiMenit)) ? durasiMenit * 60 : 3600;
         let timerInterval;
-let idPantauLive = null;
-        let jumlahPelanggaran = 0;
-        let isSedangDihukum = false; // Mencegah waktu bertumpuk
 
-        // 1. Melaporkan Kehadiran (Dengan pencarian nama yang lebih kuat)
+        // Variabel Monitor Radar
+        let idPantauLive = null;
+        let jumlahPelanggaran = 0;
+        let isSedangDihukum = false; 
+
+        // --- 3. FITUR PANTAU LIVE & HUKUMAN ---
         async function laporHadirKeGuru() {
             try {
-                // Mencari nama dari berbagai kemungkinan penyimpanan login
-                const nama = sessionStorage.getItem('nama') || sessionStorage.getItem('nama_siswa') || sessionStorage.getItem('namaSiswa') || 'Siswa Tanpa Nama';
-                const kelas = sessionStorage.getItem('kelas') || sessionStorage.getItem('kelas_siswa') || sessionStorage.getItem('kelasSiswa') || '-';
-
                 const { data, error } = await supabaseClient
                     .from('pantau_live')
                     .insert([{
                         ujian_id: idUjianSiswa,
-                        nama_siswa: nama,
-                        kelas: kelas,
+                        nama_siswa: namaSiswa,
+                        kelas: kelasSiswa,
                         status: 'Sedang Mengerjakan',
                         jumlah_pelanggaran: 0
                     }])
                     .select()
                     .single();
-
                 if (data) idPantauLive = data.id;
-            } catch (err) { console.log("Gagal menyalakan radar:", err); }
+            } catch (err) { console.log("Gagal menyalakan radar"); }
         }
 
-        // 2. Sensor Cerdas Pindah Layar (Anti-Nyontek)
         document.addEventListener("visibilitychange", async () => {
-            // Hanya aktif jika siswa keluar layar DAN sedang tidak dalam masa hukuman
             if (document.visibilityState === 'hidden' && !isSedangDihukum) {
                 jumlahPelanggaran++;
                 
-                // Diam-diam lapor ke Dashboard Guru
                 if (idPantauLive) {
                     supabaseClient.from('pantau_live')
                         .update({ jumlah_pelanggaran: jumlahPelanggaran, terakhir_aktif: new Date() })
                         .eq('id', idPantauLive).then();
                 }
 
-                // Eksekusi Hukuman Sesuai Tingkatan
                 if (jumlahPelanggaran >= 4) {
-                    alert("❌ PELANGGARAN KE-4 ❌\nBatas maksimal terlampaui. Anda dikeluarkan dari ujian secara otomatis!");
-                    kumpulkanUjian(); // Memicu fungsi selesai ujian
+                    // Paksa kumpul karena pelanggaran batas maksimal
+                    selesaiUjian(true); 
                 } else {
                     terapkanHukuman(jumlahPelanggaran);
                 }
             }
         });
 
-        // 3. Mesin Layar Hukuman (1 Menit, 2 Menit, 5 Menit)
         function terapkanHukuman(tingkat) {
-            isSedangDihukum = true; // Mengunci sensor sementara
+            isSedangDihukum = true; 
             const layar = document.getElementById('layarHukuman');
             const judul = document.getElementById('judulHukuman');
             const teks = document.getElementById('teksHukuman');
             const timerEl = document.getElementById('countdownHukuman');
             
             let waktuTunggu = 0;
-            
             if (tingkat === 1) {
-                waktuTunggu = 60; // 1 Menit
-                judul.style.color = "#f97316"; 
-                judul.innerText = "⚠️ PERINGATAN 1 ⚠️";
+                waktuTunggu = 60; 
+                judul.style.color = "#f97316"; judul.innerText = "⚠️ PERINGATAN 1 ⚠️";
                 teks.innerHTML = "Anda terdeteksi keluar dari layar ujian.<br>Silakan tunggu 1 menit untuk melanjutkan.";
             } else if (tingkat === 2) {
-                waktuTunggu = 120; // 2 Menit
-                judul.style.color = "#eab308"; 
-                judul.innerText = "🟨 KARTU KUNING (Peringatan 2) 🟨";
+                waktuTunggu = 120; 
+                judul.style.color = "#eab308"; judul.innerText = "🟨 KARTU KUNING (Peringatan 2) 🟨";
                 teks.innerHTML = "Anda kembali melakukan pelanggaran pindah layar.<br>Hukuman waktu tunggu dilipatgandakan menjadi 2 menit!";
             } else if (tingkat === 3) {
-                waktuTunggu = 300; // 5 Menit
-                judul.style.color = "#ef4444"; 
-                judul.innerText = "🟥 KARTU MERAH (Peringatan 3) 🟥";
+                waktuTunggu = 300; 
+                judul.style.color = "#ef4444"; judul.innerText = "🟥 KARTU MERAH (Peringatan 3) 🟥";
                 teks.innerHTML = "Ini adalah peringatan TERAKHIR!<br>Jika keluar layar 1x lagi, Anda akan dikeluarkan dari ujian.<br>Tunggu 5 menit untuk melanjutkan.";
             }
 
-            layar.style.display = 'flex'; // Tampilkan layar hitam pemblokir
-            
+            layar.style.display = 'flex'; 
             let sisaWaktu = waktuTunggu;
             timerEl.innerText = sisaWaktu;
 
-            // Jalankan Hitung Mundur
             const hitungMundur = setInterval(() => {
                 sisaWaktu--;
                 timerEl.innerText = sisaWaktu;
-                
-                // Jika waktu habis
                 if (sisaWaktu <= 0) {
                     clearInterval(hitungMundur);
-                    layar.style.display = 'none'; // Sembunyikan layar blokir
-                    isSedangDihukum = false; // Buka kunci sensor
+                    layar.style.display = 'none'; 
+                    isSedangDihukum = false; 
                 }
             }, 1000);
         }
 
-        // 4. Update status selesai
         async function laporkanSelesaiKeGuru() {
             if (idPantauLive) {
                 await supabaseClient.from('pantau_live').update({ status: 'Selesai' }).eq('id', idPantauLive);
             }
         }
-        
-        window.addEventListener('DOMContentLoaded', () => { laporHadirKeGuru(); });
-                }
-            }
-        });
 
-        // 3. Update status menjadi selesai saat kumpul
-        async function laporkanSelesaiKeGuru() {
-            if (idPantauLive) {
-                await supabaseClient
-                    .from('pantau_live')
-                    .update({ status: 'Selesai' })
-                    .eq('id', idPantauLive);
+        // --- 4. LOGIKA CBT (MESIN UJIAN) ---
+        function acakArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        async function mulaiSistem() {
+            document.getElementById('tampilNamaSiswa').innerText = namaSiswa;
+            document.getElementById('tampilNamaUjian').innerText = namaUjian || 'Ujian CBT';
+            
+            laporHadirKeGuru();
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('soal')
+                    .select('*')
+                    .eq('ujian_id', idUjianSiswa)
+                    .order('created_at', { ascending: true }); 
+
+                if (error) throw error;
+                if (data.length === 0) throw new Error("Belum ada soal pada ujian ini.");
+
+                daftarSoal = isUjianDiacak ? acakArray([...data]) : data;
+                
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('headerUjian').style.display = 'flex';
+                document.getElementById('ruangSoal').style.display = 'block';
+                document.getElementById('navigasiUjian').style.display = 'flex';
+
+                renderSoal(); 
+                mulaiTimer(); 
+
+            } catch (err) {
+                document.getElementById('loadingScreen').innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
             }
         }
 
-        // Jalankan pelapor kehadiran saat halaman pertama kali dimuat
-        window.addEventListener('DOMContentLoaded', () => {
-            laporHadirKeGuru();
-        });
+        function renderSoal() {
+            const soalAktif = daftarSoal[indexSoalAktif];
+            
+            document.getElementById('nomorSoalDisplay').innerText = `Soal No. ${indexSoalAktif + 1} dari ${daftarSoal.length}`;
+            document.getElementById('teksSoalDisplay').innerText = soalAktif.pertanyaan;
+
+            const imgEl = document.getElementById('gambarSoalDisplay');
+            if (soalAktif.gambar_url) {
+                imgEl.src = soalAktif.gambar_url;
+                imgEl.style.display = 'block';
+            } else {
+                imgEl.style.display = 'none';
+            }
+
+            const container = document.getElementById('opsiContainer');
+            container.innerHTML = ''; 
+
+            let opsiArray = [
+                { id_asli: 'A', teks: soalAktif.opsi_a },
+                { id_asli: 'B', teks: soalAktif.opsi_b },
+                { id_asli: 'C', teks: soalAktif.opsi_c },
+                { id_asli: 'D', teks: soalAktif.opsi_d }
+            ];
+
+            if (isUjianDiacak) opsiArray = acakArray(opsiArray);
+
+            const labelVisual = ['A', 'B', 'C', 'D'];
+            
+            opsiArray.forEach((opsi, index) => {
+                const hurufTampil = labelVisual[index]; 
+                const hurufData = opsi.id_asli; 
+
+                const divItem = document.createElement('label');
+                divItem.className = 'opsi-item';
+                if (jawabanSiswa[soalAktif.id] === hurufData) divItem.classList.add('terpilih');
+
+                divItem.innerHTML = `
+                    <span class="opsi-huruf">${hurufTampil}</span>
+                    <span class="opsi-teks">${opsi.teks}</span>
+                    <input type="radio" name="jawaban" value="${hurufData}" onchange="simpanJawaban('${soalAktif.id}', '${hurufData}')" ${jawabanSiswa[soalAktif.id] === hurufData ? 'checked' : ''}>
+                `;
+                container.appendChild(divItem);
+            });
+
+            aturTombolNavigasi();
+        }
+
+        window.simpanJawaban = function(idSoal, jawaban) {
+            jawabanSiswa[idSoal] = jawaban;
+            renderSoal(); 
+        }
+
+        window.gantiSoal = function(arah) {
+            indexSoalAktif += arah;
+            if (indexSoalAktif < 0) indexSoalAktif = 0;
+            if (indexSoalAktif >= daftarSoal.length) indexSoalAktif = daftarSoal.length - 1;
+            renderSoal();
+        }
+
+        function aturTombolNavigasi() {
+            document.getElementById('btnPrev').disabled = indexSoalAktif === 0;
+            
+            if (indexSoalAktif === daftarSoal.length - 1) {
+                document.getElementById('btnNext').style.display = 'none';
+                document.getElementById('btnFinish').style.display = 'block';
+            } else {
+                document.getElementById('btnNext').style.display = 'block';
+                document.getElementById('btnFinish').style.display = 'none';
+            }
+        }
+
+        // --- 5. TIMER & PENGUMPULAN ---
+        function mulaiTimer() {
+            const timerEl = document.getElementById('timerDisplay');
+            timerInterval = setInterval(() => {
+                sisaWaktuDetik--;
+                
+                const jam = String(Math.floor(sisaWaktuDetik / 3600)).padStart(2, '0');
+                const menit = String(Math.floor((sisaWaktuDetik % 3600) / 60)).padStart(2, '0');
+                const detik = String(sisaWaktuDetik % 60).padStart(2, '0');
+                timerEl.innerText = `${jam}:${menit}:${detik}`;
+
+                if (sisaWaktuDetik <= 0) {
+                    clearInterval(timerInterval);
+                    selesaiUjian(true); // Paksa kumpul karena waktu habis
+                }
+            }, 1000);
+        }
+
+        window.selesaiUjian = async function(isPaksa = false) {
+            if (!isPaksa) {
+                if (!confirm("Apakah Anda yakin ingin mengumpulkan jawaban sekarang?")) return;
+            } else {
+                alert("PENGUMUMAN:\nWaktu ujian telah habis atau batas pelanggaran tercapai!\nJawaban Anda dikumpulkan secara otomatis.");
+            }
+
+            clearInterval(timerInterval);
+            document.getElementById('loadingScreen').innerText = "Sedang mengoreksi dan mengirim nilai... ⏳";
+            document.getElementById('loadingScreen').style.display = 'block';
+            document.getElementById('ruangSoal').style.display = 'none';
+            document.getElementById('navigasiUjian').style.display = 'none';
+            document.getElementById('headerUjian').style.display = 'none';
+
+            let jumlahBenar = 0;
+            let totalSoal = daftarSoal.length;
+
+            daftarSoal.forEach(soal => {
+                if (jawabanSiswa[soal.id] === soal.kunci_jawaban) {
+                    jumlahBenar++;
+                }
+            });
+
+            let nilaiAkhir = totalSoal > 0 ? (jumlahBenar / totalSoal) * 100 : 0;
+            nilaiAkhir = Math.round(nilaiAkhir);
+
+            try {
+                // Simpan nilai ke tabel 'nilai'
+                await supabaseClient.from('nilai').insert([{
+                    ujian_id: idUjianSiswa,
+                    nama_siswa: namaSiswa,
+                    kelas: kelasSiswa,
+                    jumlah_benar: jumlahBenar,
+                    nilai: nilaiAkhir
+                }]);
+
+                // Ubah status di radar Guru
+                await laporkanSelesaiKeGuru();
+
+                alert(`✅ UJIAN SELESAI ✅\nNilai Anda telah tersimpan ke sistem.\nSilakan keluar dari aplikasi.`);
+                
+                // Bersihkan Sesi agar tidak bisa masuk lagi
+                sessionStorage.clear();
+                window.location.href = 'login-siswa.html';
+
+            } catch (err) {
+                alert("Gagal mengirim nilai: " + err.message);
+                document.getElementById('loadingScreen').innerText = "Gagal mengirim data. Hubungi Pengawas.";
+            }
+        }
 
         // Jalankan aplikasi saat file dibuka
         window.onload = mulaiSistem;
